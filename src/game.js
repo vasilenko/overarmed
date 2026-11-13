@@ -138,7 +138,9 @@ function layoutObstacles(g) {
         if (placed.some((o) => Math.hypot(x - o.x, y - o.y) < r + o.r + LAYOUT.gap)) continue;
         if (g.belts.some((b) => boxDist(x, y, b) < r + 12)) continue; // nothing stands on a belt
         // hp is infinite for things that cannot be destroyed; fuse counts down once a barrel is lit
-        placed.push({ kind, x, y, r, hp: OBSTACLES[kind].hp ?? Infinity, fuse: -1, flash: 0, dead: false });
+        const looks = OBSTACLES[kind].looks; // some kinds come in several looks that play the same
+        const look = looks ? looks[(Math.random() * looks.length) | 0] : kind;
+        placed.push({ kind, look, x, y, r, hp: OBSTACLES[kind].hp ?? Infinity, fuse: -1, flash: 0, dead: false });
         break;
       }
     }

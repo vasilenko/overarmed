@@ -363,21 +363,30 @@ function drawBelt(c, b, t) {
   c.restore();
 }
 
-// Obstacles are placeholder shapes for now: the art comes once the mechanics are settled.
+// Obstacles with sprites: the file assets/obstacles/<look>.png, drawn standing on the floor.
+// h — height on the arena. The grip is the middle of the bottom edge: that is where it stands.
+const OBSTACLE_ART = {
+  press: { h: 78 },
+  cabinet: { h: 80 },
+  lathe: { h: 68 },
+};
+for (const [look, art] of Object.entries(OBSTACLE_ART)) {
+  art.grip = [0.5, 1];
+  art.img = loadImage(`assets/obstacles/${look}.png`);
+}
+
 // The round footprint from the data is where the thing stands; its body rises above it,
-// so a character walking behind it is partly hidden.
+// so a character walking behind it is partly hidden. Kinds without a sprite yet are
+// placeholder shapes.
 function drawObstacle(c, o) {
   const r = o.r;
   c.fillStyle = 'rgba(0,0,0,0.3)';
   c.beginPath();
   c.ellipse(o.x, o.y + r * 0.45, r * 1.2, r * 0.5, 0, 0, 7);
   c.fill();
-  if (o.kind === 'machine') {
-    box(c, o.x - r, o.y - r * 1.9, r * 2, r * 2.5, '#5c7078', 6);
-    box(c, o.x - r + 7, o.y - r * 1.6, r * 2 - 14, r * 0.75, '#22272d', 3);
-    c.fillStyle = '#7dff8a';
-    c.fillRect(o.x - r + 12, o.y - r * 1.35, 8, 4);
-    box(c, o.x - r, o.y + r * 0.25, r * 2, r * 0.35, '#f2b705', 2);
+  const art = OBSTACLE_ART[o.look];
+  if (art) {
+    drawArt(c, art, o.x, o.y + r * 0.6);
   } else if (o.kind === 'barrel') {
     // a hit barrel flashes white; a lit one blinks until it goes off
     const lit = o.flash > 0 || (o.fuse >= 0 && Math.floor(o.fuse * 30) % 2 === 0);

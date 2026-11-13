@@ -112,7 +112,7 @@ export const ENEMIES = {
 // of the explosion, dmg is what robots inside it take (scaled with the shift, like their health),
 // selfDmg is what Buddy takes, fuse is the delay before another barrel caught in the blast goes off.
 export const OBSTACLES = {
-  machine: { r: 28 },
+  machine: { r: 28, looks: ['press', 'cabinet', 'lathe'] }, // looks: sprites to pick from, assets/obstacles/<look>.png
   pillar: { r: 17 },
   barrel: { r: 13, hp: 14, blast: 100, dmg: 55, selfDmg: 22, fuse: 0.14 },
 };
