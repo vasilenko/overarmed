@@ -327,47 +327,91 @@ function drawEnemy(c, e, g) {
 }
 
 // A conveyor belt: the sprite assets/obstacles/belt.png, drawn from straight above and lying
-// left to right. A belt that runs up or down is the same sprite turned a quarter. The sprite has
-// no arrows: yellow chevrons are drawn over its rubber by code, so they run in the direction the
-// belt carries and at its real speed. RUBBER is where the rubber sits, as fractions of the sprite.
+// left to right. A belt that runs up or down is the same sprite turned a quarter.
+// To make it look like it is moving, the rubber is not drawn in place: a stretch of it slides
+// under the rails at the belt's real speed, and the yellow chevrons ride on it like paint.
+// All numbers are fractions of the sprite's width or height:
+//   rubber — the rubber surface between the rails and the rollers;
+//   tile — a stretch of rubber from one ridge to the same ridge 14 steps on, so it repeats seamlessly;
+//   rollers — the two rollers at the ends, which get moving streaks so they seem to spin.
 const beltImg = loadImage('assets/obstacles/belt.png');
-const RUBBER = { x0: 0.08, x1: 0.92, y0: 0.22, y1: 0.76 };
+const BELT_ART = {
+  rubber: { x0: 0.08, x1: 0.92, y0: 0.22, y1: 0.76 },
+  tile: { x0: 82 / 597, x1: 516 / 597 },
+  rollers: [{ x0: 0.045, x1: 0.08 }, { x0: 0.92, x1: 0.955 }],
+};
 
 function drawBelt(c, b, t) {
+  if (!loaded(beltImg)) return;
   const flat = b.dx !== 0;
   const dir = flat ? b.dx : b.dy;
   const len = flat ? b.w : b.h;
   const wide = flat ? b.h : b.w;
+  const iw = beltImg.naturalWidth;
+  const ih = beltImg.naturalHeight;
+  const A = BELT_ART;
+  // from here on the belt lies along x with its top-left corner at the origin
   c.save();
-  // from here on the belt lies along x, centred on the origin
   c.translate(b.x + b.w / 2, b.y + b.h / 2);
   if (!flat) c.rotate(Math.PI / 2);
-  if (loaded(beltImg)) {
-    c.imageSmoothingQuality = 'high';
-    c.drawImage(beltImg, -len / 2, -wide / 2, len, wide);
-  }
-  const x0 = -len / 2 + len * RUBBER.x0;
-  const x1 = -len / 2 + len * RUBBER.x1;
-  const y0 = -wide / 2 + wide * RUBBER.y0;
-  const y1 = -wide / 2 + wide * RUBBER.y1;
+  c.translate(-len / 2, -wide / 2);
+  c.imageSmoothingQuality = 'high';
+  const x0 = A.rubber.x0 * len;
+  const x1 = A.rubber.x1 * len;
+  const y0 = A.rubber.y0 * wide;
+  const y1 = A.rubber.y1 * wide;
+  const moved = t * BELT.speed * dir; // how far the surface has travelled
+
+  // the sliding rubber, seen only through the opening between rails and rollers
+  c.save();
   c.beginPath();
   c.rect(x0, y0, x1 - x0, y1 - y0);
   c.clip();
+  const tileW = (A.tile.x1 - A.tile.x0) * len;
+  const start = x0 + (((moved % tileW) + tileW) % tileW) - tileW;
+  for (let x = start; x < x1; x += tileW) {
+    c.drawImage(beltImg, A.tile.x0 * iw, A.rubber.y0 * ih, (A.tile.x1 - A.tile.x0) * iw, (A.rubber.y1 - A.rubber.y0) * ih, x, y0, tileW, y1 - y0);
+  }
+  // chevrons painted on the rubber
   const mid = (y0 + y1) / 2;
   const half = (y1 - y0) / 2 - 3;
-  const step = 26;
-  const shift = (t * BELT.speed) % step;
-  c.strokeStyle = 'rgba(242, 183, 5, 0.55)';
+  const step = tileW / 6;
+  const first = x0 + (((moved % step) + step) % step) - step;
+  c.strokeStyle = 'rgba(242, 183, 5, 0.6)';
   c.lineWidth = 3.5;
   c.lineJoin = 'miter';
-  for (let k = -step; k < x1 - x0 + step; k += step) {
-    // the chevrons travel toward the end the belt carries to
-    const x = dir > 0 ? x0 + k + shift : x1 - k - shift;
+  for (let x = first; x < x1 + step; x += step) {
     c.beginPath();
     c.moveTo(x - 6 * dir, mid - half);
     c.lineTo(x + 6 * dir, mid);
     c.lineTo(x - 6 * dir, mid + half);
     c.stroke();
+  }
+  c.restore();
+
+  // the fixed frame: the whole sprite except the opening the rubber shows through
+  c.save();
+  c.beginPath();
+  c.rect(0, 0, len, wide);
+  c.rect(x0, y0, x1 - x0, y1 - y0);
+  c.clip('evenodd');
+  c.drawImage(beltImg, 0, 0, len, wide);
+  c.restore();
+
+  // spinning rollers: dark streaks cross each roller the way its top surface moves, slowing
+  // toward the edges like marks on a turning cylinder
+  c.strokeStyle = 'rgba(27, 29, 33, 0.45)';
+  c.lineWidth = 1.4;
+  for (const r of A.rollers) {
+    const rw = (r.x1 - r.x0) * len;
+    for (let i = 0; i < 2; i++) {
+      const turn = (((moved / (rw * 2) + i / 2) % 1) + 1) % 1; // 0..1 across the visible half
+      const x = r.x0 * len + ((1 - Math.cos(turn * Math.PI)) / 2) * rw;
+      c.beginPath();
+      c.moveTo(x, y0 + 1);
+      c.lineTo(x, y1 - 1);
+      c.stroke();
+    }
   }
   c.restore();
 }
