@@ -326,38 +326,47 @@ function drawEnemy(c, e, g) {
   }
 }
 
-// A conveyor belt, also a placeholder shape: a dark rubber strip with yellow chevrons that run
-// in the direction it carries, at the same speed as the belt itself.
+// A conveyor belt: the sprite assets/obstacles/belt.png, drawn from straight above and lying
+// left to right. A belt that runs up or down is the same sprite turned a quarter. The sprite has
+// no arrows: yellow chevrons are drawn over its rubber by code, so they run in the direction the
+// belt carries and at its real speed. RUBBER is where the rubber sits, as fractions of the sprite.
+const beltImg = loadImage('assets/obstacles/belt.png');
+const RUBBER = { x0: 0.08, x1: 0.92, y0: 0.22, y1: 0.76 };
+
 function drawBelt(c, b, t) {
-  box(c, b.x, b.y, b.w, b.h, '#22262c', 5);
-  c.save();
-  c.beginPath();
-  c.rect(b.x + 3, b.y + 3, b.w - 6, b.h - 6);
-  c.clip();
   const flat = b.dx !== 0;
   const dir = flat ? b.dx : b.dy;
   const len = flat ? b.w : b.h;
-  const half = (flat ? b.h : b.w) / 2 - 7;
-  const step = 28;
+  const wide = flat ? b.h : b.w;
+  c.save();
+  // from here on the belt lies along x, centred on the origin
+  c.translate(b.x + b.w / 2, b.y + b.h / 2);
+  if (!flat) c.rotate(Math.PI / 2);
+  if (loaded(beltImg)) {
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(beltImg, -len / 2, -wide / 2, len, wide);
+  }
+  const x0 = -len / 2 + len * RUBBER.x0;
+  const x1 = -len / 2 + len * RUBBER.x1;
+  const y0 = -wide / 2 + wide * RUBBER.y0;
+  const y1 = -wide / 2 + wide * RUBBER.y1;
+  c.beginPath();
+  c.rect(x0, y0, x1 - x0, y1 - y0);
+  c.clip();
+  const mid = (y0 + y1) / 2;
+  const half = (y1 - y0) / 2 - 3;
+  const step = 26;
   const shift = (t * BELT.speed) % step;
-  c.strokeStyle = 'rgba(242, 183, 5, 0.6)';
-  c.lineWidth = 4;
+  c.strokeStyle = 'rgba(242, 183, 5, 0.55)';
+  c.lineWidth = 3.5;
   c.lineJoin = 'miter';
-  for (let k = -step; k < len + step; k += step) {
-    // a is the position along the belt, measured from the end the belt moves away from
-    const a = dir > 0 ? k + shift : len - k - shift;
+  for (let k = -step; k < x1 - x0 + step; k += step) {
+    // the chevrons travel toward the end the belt carries to
+    const x = dir > 0 ? x0 + k + shift : x1 - k - shift;
     c.beginPath();
-    if (flat) {
-      const cy = b.y + b.h / 2;
-      c.moveTo(b.x + a - 7 * dir, cy - half);
-      c.lineTo(b.x + a + 7 * dir, cy);
-      c.lineTo(b.x + a - 7 * dir, cy + half);
-    } else {
-      const cx = b.x + b.w / 2;
-      c.moveTo(cx - half, b.y + a - 7 * dir);
-      c.lineTo(cx, b.y + a + 7 * dir);
-      c.lineTo(cx + half, b.y + a - 7 * dir);
-    }
+    c.moveTo(x - 6 * dir, mid - half);
+    c.lineTo(x + 6 * dir, mid);
+    c.lineTo(x - 6 * dir, mid + half);
     c.stroke();
   }
   c.restore();

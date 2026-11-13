@@ -125,7 +125,7 @@ export const BLAST_TIME = 0.45;
 // carries (Buddy runs at 230), count is how many belts a shift gets.
 // grip: a walking robot is carried at no more than this share of its own speed, so even the
 // slowest one can still make headway against a belt instead of being stuck on it forever.
-export const BELT = { len: 190, wide: 46, speed: 95, count: 2, grip: 0.6 };
+export const BELT = { len: 196, wide: 42, speed: 95, count: 2, grip: 0.6 }; // len / wide matches the sprite's shape
 
 // How many obstacles of each kind a shift gets, and how much room they leave.
 export const LAYOUT = {
