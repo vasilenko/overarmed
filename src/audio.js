@@ -19,6 +19,7 @@ const SOUNDS = {
   deny: ['square', 130, 100, 0.12, 0.05],
   wave: ['triangle', 440, 880, 0.35, 0.08],
   win: ['triangle', 520, 1560, 0.8, 0.1],
+  blast: ['sawtooth', 95, 28, 0.45, 0.16],
 };
 
 export function play(name) {

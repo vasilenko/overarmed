@@ -108,14 +108,21 @@ export const ENEMIES = {
 // r — radius of the round footprint that blocks movement and bullets, Buddy's and the robots' alike.
 // Footprints are round on purpose: robots walk straight at Buddy, and a round shape lets them
 // slide around it instead of getting stuck on a corner.
+// A barrel can be destroyed: hp is how much damage it takes before it blows up. blast is the radius
+// of the explosion, dmg is what robots inside it take (scaled with the shift, like their health),
+// selfDmg is what Buddy takes, fuse is the delay before another barrel caught in the blast goes off.
 export const OBSTACLES = {
   machine: { r: 28 },
   pillar: { r: 17 },
+  barrel: { r: 13, hp: 14, blast: 100, dmg: 55, selfDmg: 22, fuse: 0.14 },
 };
+
+// How long the explosion stays on screen, in seconds.
+export const BLAST_TIME = 0.35;
 
 // How many obstacles of each kind a shift gets, and how much room they leave.
 export const LAYOUT = {
-  count: { machine: 3, pillar: 3 },
+  count: { machine: 3, pillar: 3, barrel: 4 },
   edge: 100, // stay this far from the arena edges, where the robots come in
   clear: 120, // stay this far from Buddy when the shift starts
   gap: 78, // free space between two footprints: enough for the widest walking robot

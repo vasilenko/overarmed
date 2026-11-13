@@ -1,6 +1,6 @@
 // All drawing on the canvas: sprites for the characters, weapons and arena, shapes for the rest.
 
-import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME } from './data.js';
+import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME } from './data.js';
 
 const INK = '#1b1d21';
 
@@ -341,11 +341,35 @@ function drawObstacle(c, o) {
     c.fillStyle = '#7dff8a';
     c.fillRect(o.x - r + 12, o.y - r * 1.35, 8, 4);
     box(c, o.x - r, o.y + r * 0.25, r * 2, r * 0.35, '#f2b705', 2);
+  } else if (o.kind === 'barrel') {
+    // a hit barrel flashes white; a lit one blinks until it goes off
+    const lit = o.flash > 0 || (o.fuse >= 0 && Math.floor(o.fuse * 30) % 2 === 0);
+    box(c, o.x - r, o.y - r * 2.1, r * 2, r * 2.7, lit ? '#fff' : '#c8442f', 5);
+    c.fillStyle = INK;
+    c.fillRect(o.x - r, o.y - r * 1.45, r * 2, 2.5);
+    c.fillRect(o.x - r, o.y - r * 0.2, r * 2, 2.5);
+    box(c, o.x - 5, o.y - r * 1.15, 10, 10, '#ffc21a', 2);
   } else {
     box(c, o.x - r, o.y - r * 3.4, r * 2, r * 4, '#8f949c', 5);
     box(c, o.x - r - 3, o.y + r * 0.2, r * 2 + 6, r * 0.45, '#5b6068', 3);
     box(c, o.x - r, o.y - r * 1.2, r * 2, r * 0.5, '#f2b705', 1);
   }
+}
+
+// A barrel explosion: a fireball that swells to the blast radius and fades.
+function drawBlast(c, b) {
+  const k = b.t / BLAST_TIME;
+  const r = b.r * (1 - (1 - k) ** 3);
+  c.globalAlpha = 1 - k;
+  c.fillStyle = '#ff7a1a';
+  c.beginPath();
+  c.arc(b.x, b.y, r, 0, 7);
+  c.fill();
+  c.fillStyle = '#ffe7a3';
+  c.beginPath();
+  c.arc(b.x, b.y, r * 0.6, 0, 7);
+  c.fill();
+  c.globalAlpha = 1;
 }
 
 // The copier throws sheets of paper, the director throws pink termination notices.
@@ -471,6 +495,7 @@ export function draw(c, g) {
   queue.sort((a, b) => a.y - b.y);
   for (const item of queue) item.draw();
   drawFenceFront(c);
+  for (const b of g.blasts) drawBlast(c, b);
   for (const s of g.shots) drawShot(c, s);
   for (const f of g.flashes) drawFlash(c, f);
   for (const s of g.foeShots) drawFoeShot(c, s, g.time);

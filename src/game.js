@@ -3,7 +3,7 @@
 
 import {
   W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS, OBSTACLES, LAYOUT,
-  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, FLASH_TIME, waveCfg,
+  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, FLASH_TIME, BLAST_TIME, waveCfg,
 } from './data.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -39,6 +39,7 @@ export function newGame(starter) {
     fx: [],
     texts: [],
     flashes: [], // muzzle flashes, they live for a fraction of a second
+    blasts: [], // barrel explosions still on screen
     boss: null,
     shake: 0,
     hudPop: 0, // the nut counter pulses on pickup, from 1 down to 0
@@ -96,7 +97,8 @@ function layoutObstacles(g) {
         const y = rand(LAYOUT.edge + 30, H - LAYOUT.edge); // extra room at the top keeps tall bodies off the interface
         if (Math.hypot(x - g.player.x, y - g.player.y) < LAYOUT.clear + r) continue;
         if (placed.some((o) => Math.hypot(x - o.x, y - o.y) < r + o.r + LAYOUT.gap)) continue;
-        placed.push({ kind, x, y, r });
+        // hp is infinite for things that cannot be destroyed; fuse counts down once a barrel is lit
+        placed.push({ kind, x, y, r, hp: OBSTACLES[kind].hp ?? Infinity, fuse: -1, flash: 0, dead: false });
         break;
       }
     }
@@ -123,9 +125,54 @@ function blocked(g, x, y) {
   return g.obstacles.some((o) => (x - o.x) ** 2 + (y - o.y) ** 2 < o.r * o.r);
 }
 
-// Whether an obstacle stands between two points: guns do not waste shots on robots behind cover.
+// Whether solid cover stands between two points: guns do not waste shots on robots behind it.
+// Barrels do not count: shooting a robot through a barrel is exactly how you set the barrel off.
 function hidden(g, ax, ay, bx, by) {
-  return g.obstacles.some((o) => segDist(o.x, o.y, ax, ay, bx, by) < o.r);
+  return g.obstacles.some((o) => o.hp === Infinity && segDist(o.x, o.y, ax, ay, bx, by) < o.r);
+}
+
+// Damage to an obstacle. Only barrels have hit points; at zero they blow up.
+function hitObstacle(g, o, dmg) {
+  if (o.hp === Infinity || o.dead) return;
+  o.hp -= dmg;
+  o.flash = 0.1;
+  g.sfx.push('hit');
+  if (o.hp <= 0) explode(g, o);
+}
+
+// A barrel blows up: robots in the blast take heavy damage and fly back, Buddy gets hurt if he
+// stands too close, and other barrels in range catch fire and follow a moment later.
+function explode(g, o) {
+  const def = OBSTACLES[o.kind];
+  o.dead = true;
+  g.blasts.push({ x: o.x, y: o.y, r: def.blast, t: 0 });
+  g.shake = Math.max(g.shake, 0.4);
+  g.sfx.push('blast');
+  burst(g, o.x, o.y, '#ff7a1a', 10);
+  burst(g, o.x, o.y, '#ffd34d', 8);
+  for (const e of g.enemies) {
+    if (e.dead) continue;
+    const d = Math.hypot(e.x - o.x, e.y - o.y);
+    if (d < def.blast + e.r) hurtEnemy(g, e, def.dmg * g.cfg.hpMul, Math.atan2(e.y - o.y, e.x - o.x), 420);
+  }
+  const p = g.player;
+  if (Math.hypot(p.x - o.x, p.y - o.y) < def.blast + p.r) hurtPlayer(g, def.selfDmg);
+  for (const other of g.obstacles) {
+    if (other === o || other.dead || other.hp === Infinity || other.fuse >= 0) continue;
+    if (Math.hypot(other.x - o.x, other.y - o.y) < def.blast + other.r) other.fuse = OBSTACLES[other.kind].fuse;
+  }
+}
+
+// Burns down lit fuses and removes what has blown up.
+function stepObstacles(g, dt) {
+  for (const o of g.obstacles) {
+    o.flash -= dt;
+    if (o.fuse >= 0 && !o.dead) {
+      o.fuse -= dt;
+      if (o.fuse <= 0) explode(g, o);
+    }
+  }
+  g.obstacles = g.obstacles.filter((o) => !o.dead);
 }
 
 // If an obstacle is right ahead, turns the heading along its edge so the robot slides around it.
@@ -184,6 +231,7 @@ export function update(g, dt, input) {
   poseArms(g);
   stepArms(g, dt);
   stepShots(g, dt);
+  stepObstacles(g, dt);
   stepEnemies(g, dt);
   stepFoeShots(g, dt);
   stepDrops(g, dt);
@@ -279,6 +327,14 @@ function stepArms(g, dt) {
           hurtEnemy(g, e, dmg, a.aim, def.knock);
         }
       }
+      // a swing sets off barrels too
+      for (const o of g.obstacles) {
+        if (o.hp === Infinity || o.dead || a.hit.has(o)) continue;
+        if (segDist(o.x, o.y, a.x, a.y, tipX, tipY) < o.r + 6) {
+          a.hit.add(o);
+          hitObstacle(g, o, dmg);
+        }
+      }
       if (a.swing >= 1) {
         a.swing = -1;
         a.aim = a.dir;
@@ -344,9 +400,11 @@ function stepShots(g, dt) {
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     s.life -= dt;
-    if (blocked(g, s.x, s.y)) {
+    const wall = g.obstacles.find((o) => !o.dead && (s.x - o.x) ** 2 + (s.y - o.y) ** 2 < o.r * o.r);
+    if (wall) {
       s.life = 0;
       burst(g, s.x, s.y, '#ffe7a3', 2);
+      hitObstacle(g, wall, s.dmg);
       continue;
     }
     for (const e of g.enemies) {
@@ -699,6 +757,8 @@ function stepFx(g, dt) {
     t.y -= 40 * dt;
   }
   g.texts = g.texts.filter((t) => t.t < 0.6);
+  for (const b of g.blasts) b.t += dt;
+  g.blasts = g.blasts.filter((b) => b.t < BLAST_TIME);
   for (const f of g.flashes) f.t += dt;
   g.flashes = g.flashes.filter((f) => f.t < FLASH_TIME);
 }
