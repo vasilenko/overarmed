@@ -1,0 +1,6 @@
+# macOS and Python housekeeping files
+.DS_Store
+__pycache__/
+
+# design check cache, it is recreated automatically
+.impeccable/hook.cache.json

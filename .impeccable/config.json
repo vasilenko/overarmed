@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "style.css"
+        ],
+        "createdAt": "2026-11-13T08:01:29.263Z",
+        "reason": "Claude decided: .panel::before is a yellow-black hazard tape along the top edge of menu panels, repeating the arena fence motif of the game; it is not a one-sided accent border on a card"
+      }
+    ]
+  }
+}
