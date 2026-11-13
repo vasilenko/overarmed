@@ -114,12 +114,12 @@ function boxDist(px, py, b) {
   return Math.hypot(Math.max(b.x - px, 0, px - b.x - b.w), Math.max(b.y - py, 0, py - b.y - b.h));
 }
 
-// Moves a body along with the belt it stands on.
-function carry(g, body, dt) {
+// Moves a body along with the belt it stands on, at the belt speed unless a lower one is given.
+function carry(g, body, dt, speed = BELT.speed) {
   for (const b of g.belts) {
     if (body.x < b.x || body.x > b.x + b.w || body.y < b.y || body.y > b.y + b.h) continue;
-    body.x += b.dx * BELT.speed * dt;
-    body.y += b.dy * BELT.speed * dt;
+    body.x += b.dx * speed * dt;
+    body.y += b.dy * speed * dt;
     return;
   }
 }
@@ -531,7 +531,7 @@ function stepEnemies(g, dt) {
     e.x += (vx * e.speed + e.kx) * dt;
     e.y += (vy * e.speed + e.ky) * dt;
     if (!def.flies) {
-      carry(g, e, dt);
+      carry(g, e, dt, Math.min(BELT.speed, e.speed * BELT.grip));
       pushOut(g, e, e.r);
     }
     e.kx *= decay;
