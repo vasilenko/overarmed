@@ -2,7 +2,7 @@
 // The game does not play sounds itself, it pushes their names into g.sfx.
 
 import {
-  W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS,
+  W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS, OBSTACLES, LAYOUT,
   PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, FLASH_TIME, waveCfg,
 } from './data.js';
 
@@ -35,6 +35,7 @@ export function newGame(starter) {
     shots: [],
     foeShots: [],
     drops: [],
+    obstacles: [],
     fx: [],
     texts: [],
     flashes: [], // muzzle flashes, they live for a fraction of a second
@@ -79,7 +80,69 @@ function startWave(g) {
   g.shots = [];
   g.foeShots = [];
   g.drops = [];
+  g.obstacles = layoutObstacles(g);
   g.boss = g.cfg.boss ? spawnEnemy(g, 'boss', W / 2, -60) : null;
+}
+
+// Rolls a fresh obstacle layout for the shift: random spots that keep clear of the edges,
+// of Buddy and of each other. A spot that cannot be found after many tries is simply skipped.
+function layoutObstacles(g) {
+  const placed = [];
+  for (const [kind, n] of Object.entries(LAYOUT.count)) {
+    const r = OBSTACLES[kind].r;
+    for (let i = 0; i < n; i++) {
+      for (let tries = 0; tries < 60; tries++) {
+        const x = rand(LAYOUT.edge, W - LAYOUT.edge);
+        const y = rand(LAYOUT.edge + 30, H - LAYOUT.edge); // extra room at the top keeps tall bodies off the interface
+        if (Math.hypot(x - g.player.x, y - g.player.y) < LAYOUT.clear + r) continue;
+        if (placed.some((o) => Math.hypot(x - o.x, y - o.y) < r + o.r + LAYOUT.gap)) continue;
+        placed.push({ kind, x, y, r });
+        break;
+      }
+    }
+  }
+  return placed;
+}
+
+// Pushes a round body out of every obstacle it overlaps.
+function pushOut(g, body, r) {
+  for (const o of g.obstacles) {
+    const dx = body.x - o.x;
+    const dy = body.y - o.y;
+    const min = o.r + r;
+    if (Math.abs(dx) >= min || Math.abs(dy) >= min) continue;
+    const d = Math.hypot(dx, dy) || 0.01;
+    if (d >= min) continue;
+    body.x = o.x + (dx / d) * min;
+    body.y = o.y + (dy / d) * min;
+  }
+}
+
+// Whether a point is inside an obstacle: this is where bullets stop.
+function blocked(g, x, y) {
+  return g.obstacles.some((o) => (x - o.x) ** 2 + (y - o.y) ** 2 < o.r * o.r);
+}
+
+// Whether an obstacle stands between two points: guns do not waste shots on robots behind cover.
+function hidden(g, ax, ay, bx, by) {
+  return g.obstacles.some((o) => segDist(o.x, o.y, ax, ay, bx, by) < o.r);
+}
+
+// If an obstacle is right ahead, turns the heading along its edge so the robot slides around it.
+function steerAround(g, e, vx, vy) {
+  for (const o of g.obstacles) {
+    const ox = o.x - e.x;
+    const oy = o.y - e.y;
+    const d = Math.hypot(ox, oy) || 0.01;
+    if (d > o.r + e.r + 10) continue;
+    if (vx * ox + vy * oy <= 0) continue; // already heading away from it
+    // go round on the side the robot already leans to; a dead-centre hit is settled by its own habit
+    const cross = ox * vy - oy * vx;
+    const side = Math.abs(cross) > 0.05 * d ? Math.sign(cross) : e.strafe;
+    const len = Math.hypot(vx, vy);
+    return [(-oy / d) * side * len, (ox / d) * side * len];
+  }
+  return [vx, vy];
 }
 
 export function nextWave(g) {
@@ -114,6 +177,7 @@ export function update(g, dt, input) {
   }
   p.x = clamp(p.x, 32, W - 32);
   p.y = clamp(p.y, 44, H - 34);
+  pushOut(g, p, p.r);
   p.inv -= dt;
   if (s.regen > 0) p.hp = Math.min(s.maxHp, p.hp + s.regen * dt);
 
@@ -176,6 +240,7 @@ function pickTarget(g, a, side, range, strike, taken) {
     const d = Math.hypot(e.x - a.bx, e.y - a.by) - e.r;
     if (d >= range) continue;
     const across = Math.sign(e.x - g.player.x) === -side ? 60 : 0;
+    if (strike < 0 && hidden(g, a.bx, a.by, e.x, e.y)) continue; // a gun cannot hit a robot behind cover
     const score = d <= strike ? d - 1000 : d + across + 90 * (taken.get(e) || 0) - (e === a.target ? 25 : 0);
     if (score < bestScore) {
       bestScore = score;
@@ -279,6 +344,11 @@ function stepShots(g, dt) {
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     s.life -= dt;
+    if (blocked(g, s.x, s.y)) {
+      s.life = 0;
+      burst(g, s.x, s.y, '#ffe7a3', 2);
+      continue;
+    }
     for (const e of g.enemies) {
       if (e.dead || s.hit.has(e)) continue;
       if ((e.x - s.x) ** 2 + (e.y - s.y) ** 2 < (e.r + s.r) ** 2) {
@@ -329,7 +399,8 @@ function stepEnemies(g, dt) {
   const decay = Math.pow(0.002, dt);
 
   for (const e of g.enemies) {
-    const ai = ENEMIES[e.type].ai;
+    const def = ENEMIES[e.type];
+    const ai = def.ai;
     const dx = p.x - e.x;
     const dy = p.y - e.y;
     const d = Math.hypot(dx, dy) || 1;
@@ -356,8 +427,11 @@ function stepEnemies(g, dt) {
       }
     }
 
+    // walking robots go around obstacles, flying ones pass over them
+    if (!def.flies) [vx, vy] = steerAround(g, e, vx, vy);
     e.x += (vx * e.speed + e.kx) * dt;
     e.y += (vy * e.speed + e.ky) * dt;
+    if (!def.flies) pushOut(g, e, e.r);
     e.kx *= decay;
     e.ky *= decay;
     e.flash -= dt;
@@ -411,6 +485,7 @@ function stepFoeShots(g, dt) {
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     s.life -= dt;
+    if (blocked(g, s.x, s.y)) s.life = 0; // cover works both ways
     if (p.inv <= 0 && (s.x - p.x) ** 2 + (s.y - p.y) ** 2 < (s.r + p.r) ** 2) {
       s.life = 0;
       hurtPlayer(g, s.dmg);
@@ -444,6 +519,7 @@ function stepDrops(g, dt) {
     d.t += dt;
     d.x = clamp(d.x + d.vx * dt, 26, W - 26);
     d.y = clamp(d.y + d.vy * dt, 42, H - 36); // not under the railing: an item would be hard to see there
+    pushOut(g, d, 6); // and not inside an obstacle
     d.vx *= decay;
     d.vy *= decay;
     const dx = p.x - d.x;

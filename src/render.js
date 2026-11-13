@@ -326,6 +326,28 @@ function drawEnemy(c, e, g) {
   }
 }
 
+// Obstacles are placeholder shapes for now: the art comes once the mechanics are settled.
+// The round footprint from the data is where the thing stands; its body rises above it,
+// so a character walking behind it is partly hidden.
+function drawObstacle(c, o) {
+  const r = o.r;
+  c.fillStyle = 'rgba(0,0,0,0.3)';
+  c.beginPath();
+  c.ellipse(o.x, o.y + r * 0.45, r * 1.2, r * 0.5, 0, 0, 7);
+  c.fill();
+  if (o.kind === 'machine') {
+    box(c, o.x - r, o.y - r * 1.9, r * 2, r * 2.5, '#5c7078', 6);
+    box(c, o.x - r + 7, o.y - r * 1.6, r * 2 - 14, r * 0.75, '#22272d', 3);
+    c.fillStyle = '#7dff8a';
+    c.fillRect(o.x - r + 12, o.y - r * 1.35, 8, 4);
+    box(c, o.x - r, o.y + r * 0.25, r * 2, r * 0.35, '#f2b705', 2);
+  } else {
+    box(c, o.x - r, o.y - r * 3.4, r * 2, r * 4, '#8f949c', 5);
+    box(c, o.x - r - 3, o.y + r * 0.2, r * 2 + 6, r * 0.45, '#5b6068', 3);
+    box(c, o.x - r, o.y - r * 1.2, r * 2, r * 0.5, '#f2b705', 1);
+  }
+}
+
 // The copier throws sheets of paper, the director throws pink termination notices.
 function drawFoeShot(c, s, t) {
   drawItem(c, s.kind === 'boss' ? 'pinkslip' : 'paper', s.x, s.y, 1, s.spin + t * 6);
@@ -441,11 +463,13 @@ export function draw(c, g) {
   }
   drawFenceBack(c);
   for (const d of g.drops) drawDrop(c, d, g.time);
-  // whoever is lower on the screen is closer to the viewer and drawn on top; Buddy is in the same queue
-  const foes = g.enemies.filter((e) => !e.dead).sort((a, b) => a.y - b.y);
-  for (const e of foes) if (e.y <= g.player.y) drawEnemy(c, e, g);
-  drawBuddy(c, g);
-  for (const e of foes) if (e.y > g.player.y) drawEnemy(c, e, g);
+  // Everything that stands on the floor shares one queue, sorted by where it touches the floor:
+  // whoever is lower on the screen is closer to the viewer and is drawn on top.
+  const queue = [{ y: g.player.y, draw: () => drawBuddy(c, g) }];
+  for (const e of g.enemies) if (!e.dead) queue.push({ y: e.y, draw: () => drawEnemy(c, e, g) });
+  for (const o of g.obstacles) queue.push({ y: o.y, draw: () => drawObstacle(c, o) });
+  queue.sort((a, b) => a.y - b.y);
+  for (const item of queue) item.draw();
   drawFenceFront(c);
   for (const s of g.shots) drawShot(c, s);
   for (const f of g.flashes) drawFlash(c, f);

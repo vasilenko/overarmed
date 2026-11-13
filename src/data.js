@@ -95,12 +95,30 @@ export const WEAPONS = {
 };
 
 // mass — how hard it is to push back. ai: chase goes for the player, shooter keeps its distance.
+// flies — the robot passes over obstacles instead of walking around them.
 export const ENEMIES = {
   intern: { name: 'Intern Bot', hp: 16, speed: 78, dmg: 8, r: 15, bolts: 1, mass: 1, ai: 'chase' },
-  drone: { name: 'Courier Drone', hp: 9, speed: 165, dmg: 6, r: 11, bolts: 1, mass: 0.7, ai: 'chase' },
+  drone: { name: 'Courier Drone', hp: 9, speed: 165, dmg: 6, r: 11, bolts: 1, mass: 0.7, ai: 'chase', flies: true },
   copier: { name: 'Copier', hp: 26, speed: 60, dmg: 8, r: 17, bolts: 2, mass: 1.3, ai: 'shooter' },
   forklift: { name: 'Forklift', hp: 90, speed: 48, dmg: 20, r: 24, bolts: 5, mass: 3.5, ai: 'chase' },
-  boss: { name: 'Director-3000', hp: 3500, speed: 70, dmg: 25, r: 44, bolts: 40, mass: 25, ai: 'boss' },
+  boss: { name: 'Director-3000', hp: 3500, speed: 70, dmg: 25, r: 44, bolts: 40, mass: 25, ai: 'boss', flies: true },
+};
+
+// Obstacles on the factory floor. A new layout is rolled at the start of every shift.
+// r — radius of the round footprint that blocks movement and bullets, Buddy's and the robots' alike.
+// Footprints are round on purpose: robots walk straight at Buddy, and a round shape lets them
+// slide around it instead of getting stuck on a corner.
+export const OBSTACLES = {
+  machine: { r: 28 },
+  pillar: { r: 17 },
+};
+
+// How many obstacles of each kind a shift gets, and how much room they leave.
+export const LAYOUT = {
+  count: { machine: 3, pillar: 3 },
+  edge: 100, // stay this far from the arena edges, where the robots come in
+  clear: 120, // stay this far from Buddy when the shift starts
+  gap: 78, // free space between two footprints: enough for the widest walking robot
 };
 
 // mods are added to BASE_STATS. Items stack without limit.
