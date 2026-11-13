@@ -118,7 +118,7 @@ export const OBSTACLES = {
 };
 
 // How long the explosion stays on screen, in seconds.
-export const BLAST_TIME = 0.35;
+export const BLAST_TIME = 0.45;
 
 // Conveyor belts block nothing: they carry along whatever stands on them — Buddy, walking robots
 // and dropped items alike. len and wide are the belt size in arena pixels, speed is how fast it

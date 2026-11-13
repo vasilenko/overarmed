@@ -369,15 +369,19 @@ const OBSTACLE_ART = {
   press: { h: 78 },
   cabinet: { h: 80 },
   lathe: { h: 68 },
+  pillar: { h: 86 },
+  barrel: { h: 40 },
 };
 for (const [look, art] of Object.entries(OBSTACLE_ART)) {
   art.grip = [0.5, 1];
   art.img = loadImage(`assets/obstacles/${look}.png`);
 }
 
+// The explosion of a barrel, assets/obstacles/blast.png. Its height is set from the blast radius.
+const blastImg = loadImage('assets/obstacles/blast.png');
+
 // The round footprint from the data is where the thing stands; its body rises above it,
-// so a character walking behind it is partly hidden. Kinds without a sprite yet are
-// placeholder shapes.
+// so a character walking behind it is partly hidden.
 function drawObstacle(c, o) {
   const r = o.r;
   c.fillStyle = 'rgba(0,0,0,0.3)';
@@ -385,36 +389,38 @@ function drawObstacle(c, o) {
   c.ellipse(o.x, o.y + r * 0.45, r * 1.2, r * 0.5, 0, 0, 7);
   c.fill();
   const art = OBSTACLE_ART[o.look];
-  if (art) {
-    drawArt(c, art, o.x, o.y + r * 0.6);
-  } else if (o.kind === 'barrel') {
-    // a hit barrel flashes white; a lit one blinks until it goes off
-    const lit = o.flash > 0 || (o.fuse >= 0 && Math.floor(o.fuse * 30) % 2 === 0);
-    box(c, o.x - r, o.y - r * 2.1, r * 2, r * 2.7, lit ? '#fff' : '#c8442f', 5);
-    c.fillStyle = INK;
-    c.fillRect(o.x - r, o.y - r * 1.45, r * 2, 2.5);
-    c.fillRect(o.x - r, o.y - r * 0.2, r * 2, 2.5);
-    box(c, o.x - 5, o.y - r * 1.15, 10, 10, '#ffc21a', 2);
-  } else {
-    box(c, o.x - r, o.y - r * 3.4, r * 2, r * 4, '#8f949c', 5);
-    box(c, o.x - r - 3, o.y + r * 0.2, r * 2 + 6, r * 0.45, '#5b6068', 3);
-    box(c, o.x - r, o.y - r * 1.2, r * 2, r * 0.5, '#f2b705', 1);
+  if (!art || !loaded(art.img)) return;
+  const base = o.y + r * 0.6;
+  drawArt(c, art, o.x, base);
+  // a hit barrel flashes white; a lit one blinks until it goes off
+  const lit = o.flash > 0 || (o.fuse >= 0 && Math.floor(o.fuse * 30) % 2 === 0);
+  if (lit) {
+    art.white ||= whiteCopy(art.img);
+    const w = (art.h * art.img.naturalWidth) / art.img.naturalHeight;
+    c.globalAlpha = 0.8;
+    c.drawImage(art.white, o.x - w / 2, base - art.h, w, art.h);
+    c.globalAlpha = 1;
   }
 }
 
-// A barrel explosion: a fireball that swells to the blast radius and fades.
+// A barrel explosion: a white-hot flash for the first instant, then the fireball sprite that swells
+// past the blast radius and fades out.
 function drawBlast(c, b) {
   const k = b.t / BLAST_TIME;
-  const r = b.r * (1 - (1 - k) ** 3);
-  c.globalAlpha = 1 - k;
-  c.fillStyle = '#ff7a1a';
-  c.beginPath();
-  c.arc(b.x, b.y, r, 0, 7);
-  c.fill();
-  c.fillStyle = '#ffe7a3';
-  c.beginPath();
-  c.arc(b.x, b.y, r * 0.6, 0, 7);
-  c.fill();
+  if (k < 0.25) {
+    c.globalAlpha = 1 - k / 0.25;
+    c.fillStyle = '#fff6d6';
+    c.beginPath();
+    c.arc(b.x, b.y, b.r * 0.9, 0, 7);
+    c.fill();
+  }
+  if (loaded(blastImg)) {
+    const h = b.r * 2 * (0.45 + 0.75 * (1 - (1 - k) ** 3));
+    const w = (h * blastImg.naturalWidth) / blastImg.naturalHeight;
+    c.globalAlpha = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45;
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(blastImg, b.x - w / 2, b.y - h / 2, w, h);
+  }
   c.globalAlpha = 1;
 }
 
