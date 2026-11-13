@@ -2,7 +2,7 @@
 // The game does not play sounds itself, it pushes their names into g.sfx.
 
 import {
-  W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS, OBSTACLES, LAYOUT,
+  W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS, OBSTACLES, LAYOUT, BELT,
   PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, FLASH_TIME, BLAST_TIME, waveCfg,
 } from './data.js';
 
@@ -36,6 +36,7 @@ export function newGame(starter) {
     foeShots: [],
     drops: [],
     obstacles: [],
+    belts: [],
     fx: [],
     texts: [],
     flashes: [], // muzzle flashes, they live for a fraction of a second
@@ -81,12 +82,50 @@ function startWave(g) {
   g.shots = [];
   g.foeShots = [];
   g.drops = [];
+  g.belts = layoutBelts(g);
   g.obstacles = layoutObstacles(g);
   g.boss = g.cfg.boss ? spawnEnemy(g, 'boss', W / 2, -60) : null;
 }
 
+// Rolls the conveyor belts for the shift. A belt is a rectangle x, y, w, h that carries along the
+// unit vector dx, dy; it runs either along or across the arena, in either direction.
+function layoutBelts(g) {
+  const belts = [];
+  for (let i = 0; i < BELT.count; i++) {
+    for (let tries = 0; tries < 60; tries++) {
+      const flat = Math.random() < 0.5;
+      const w = flat ? BELT.len : BELT.wide;
+      const h = flat ? BELT.wide : BELT.len;
+      const x = rand(LAYOUT.edge, W - LAYOUT.edge - w);
+      const y = rand(LAYOUT.edge + 30, H - LAYOUT.edge - h);
+      // not under Buddy's feet at the start, and not on top of another belt
+      if (boxDist(g.player.x, g.player.y, { x, y, w, h }) < LAYOUT.clear * 0.6) continue;
+      if (belts.some((b) => x < b.x + b.w + 40 && b.x < x + w + 40 && y < b.y + b.h + 40 && b.y < y + h + 40)) continue;
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      belts.push({ x, y, w, h, dx: flat ? dir : 0, dy: flat ? 0 : dir });
+      break;
+    }
+  }
+  return belts;
+}
+
+// Distance from a point to a rectangle; zero when the point is inside it.
+function boxDist(px, py, b) {
+  return Math.hypot(Math.max(b.x - px, 0, px - b.x - b.w), Math.max(b.y - py, 0, py - b.y - b.h));
+}
+
+// Moves a body along with the belt it stands on.
+function carry(g, body, dt) {
+  for (const b of g.belts) {
+    if (body.x < b.x || body.x > b.x + b.w || body.y < b.y || body.y > b.y + b.h) continue;
+    body.x += b.dx * BELT.speed * dt;
+    body.y += b.dy * BELT.speed * dt;
+    return;
+  }
+}
+
 // Rolls a fresh obstacle layout for the shift: random spots that keep clear of the edges,
-// of Buddy and of each other. A spot that cannot be found after many tries is simply skipped.
+// of Buddy, of the belts and of each other. A spot that cannot be found after many tries is simply skipped.
 function layoutObstacles(g) {
   const placed = [];
   for (const [kind, n] of Object.entries(LAYOUT.count)) {
@@ -97,6 +136,7 @@ function layoutObstacles(g) {
         const y = rand(LAYOUT.edge + 30, H - LAYOUT.edge); // extra room at the top keeps tall bodies off the interface
         if (Math.hypot(x - g.player.x, y - g.player.y) < LAYOUT.clear + r) continue;
         if (placed.some((o) => Math.hypot(x - o.x, y - o.y) < r + o.r + LAYOUT.gap)) continue;
+        if (g.belts.some((b) => boxDist(x, y, b) < r + 12)) continue; // nothing stands on a belt
         // hp is infinite for things that cannot be destroyed; fuse counts down once a barrel is lit
         placed.push({ kind, x, y, r, hp: OBSTACLES[kind].hp ?? Infinity, fuse: -1, flash: 0, dead: false });
         break;
@@ -222,6 +262,7 @@ export function update(g, dt, input) {
     p.y += my * PLAYER_SPEED * s.speed * dt;
     if (Math.abs(mx) > 0.1) p.face = Math.sign(mx);
   }
+  carry(g, p, dt);
   p.x = clamp(p.x, 32, W - 32);
   p.y = clamp(p.y, 44, H - 34);
   pushOut(g, p, p.r);
@@ -489,7 +530,10 @@ function stepEnemies(g, dt) {
     if (!def.flies) [vx, vy] = steerAround(g, e, vx, vy);
     e.x += (vx * e.speed + e.kx) * dt;
     e.y += (vy * e.speed + e.ky) * dt;
-    if (!def.flies) pushOut(g, e, e.r);
+    if (!def.flies) {
+      carry(g, e, dt);
+      pushOut(g, e, e.r);
+    }
     e.kx *= decay;
     e.ky *= decay;
     e.flash -= dt;
@@ -575,6 +619,7 @@ function stepDrops(g, dt) {
   const decay = Math.pow(0.01, dt);
   for (const d of g.drops) {
     d.t += dt;
+    carry(g, d, dt);
     d.x = clamp(d.x + d.vx * dt, 26, W - 26);
     d.y = clamp(d.y + d.vy * dt, 42, H - 36); // not under the railing: an item would be hard to see there
     pushOut(g, d, 6); // and not inside an obstacle

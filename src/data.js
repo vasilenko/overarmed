@@ -120,6 +120,11 @@ export const OBSTACLES = {
 // How long the explosion stays on screen, in seconds.
 export const BLAST_TIME = 0.35;
 
+// Conveyor belts block nothing: they carry along whatever stands on them — Buddy, walking robots
+// and dropped items alike. len and wide are the belt size in arena pixels, speed is how fast it
+// carries (Buddy runs at 230), count is how many belts a shift gets.
+export const BELT = { len: 190, wide: 46, speed: 95, count: 2 };
+
 // How many obstacles of each kind a shift gets, and how much room they leave.
 export const LAYOUT = {
   count: { machine: 3, pillar: 3, barrel: 4 },

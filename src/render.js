@@ -1,6 +1,6 @@
 // All drawing on the canvas: sprites for the characters, weapons and arena, shapes for the rest.
 
-import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME } from './data.js';
+import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, BELT } from './data.js';
 
 const INK = '#1b1d21';
 
@@ -326,6 +326,43 @@ function drawEnemy(c, e, g) {
   }
 }
 
+// A conveyor belt, also a placeholder shape: a dark rubber strip with yellow chevrons that run
+// in the direction it carries, at the same speed as the belt itself.
+function drawBelt(c, b, t) {
+  box(c, b.x, b.y, b.w, b.h, '#22262c', 5);
+  c.save();
+  c.beginPath();
+  c.rect(b.x + 3, b.y + 3, b.w - 6, b.h - 6);
+  c.clip();
+  const flat = b.dx !== 0;
+  const dir = flat ? b.dx : b.dy;
+  const len = flat ? b.w : b.h;
+  const half = (flat ? b.h : b.w) / 2 - 7;
+  const step = 28;
+  const shift = (t * BELT.speed) % step;
+  c.strokeStyle = 'rgba(242, 183, 5, 0.6)';
+  c.lineWidth = 4;
+  c.lineJoin = 'miter';
+  for (let k = -step; k < len + step; k += step) {
+    // a is the position along the belt, measured from the end the belt moves away from
+    const a = dir > 0 ? k + shift : len - k - shift;
+    c.beginPath();
+    if (flat) {
+      const cy = b.y + b.h / 2;
+      c.moveTo(b.x + a - 7 * dir, cy - half);
+      c.lineTo(b.x + a + 7 * dir, cy);
+      c.lineTo(b.x + a - 7 * dir, cy + half);
+    } else {
+      const cx = b.x + b.w / 2;
+      c.moveTo(cx - half, b.y + a - 7 * dir);
+      c.lineTo(cx, b.y + a + 7 * dir);
+      c.lineTo(cx + half, b.y + a - 7 * dir);
+    }
+    c.stroke();
+  }
+  c.restore();
+}
+
 // Obstacles are placeholder shapes for now: the art comes once the mechanics are settled.
 // The round footprint from the data is where the thing stands; its body rises above it,
 // so a character walking behind it is partly hidden.
@@ -486,6 +523,7 @@ export function draw(c, g) {
     c.fillRect(0, 0, W, H);
   }
   drawFenceBack(c);
+  for (const b of g.belts) drawBelt(c, b, g.time);
   for (const d of g.drops) drawDrop(c, d, g.time);
   // Everything that stands on the floor shares one queue, sorted by where it touches the floor:
   // whoever is lower on the screen is closer to the viewer and is drawn on top.
