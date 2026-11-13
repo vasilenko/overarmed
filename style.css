@@ -37,6 +37,7 @@ canvas#game {
   inset: 0;
   display: none;
   place-items: center;
+  align-items: safe center; /* a panel taller than the screen starts at the top instead of being cut off */
   padding: 16px;
   overflow: auto;
   background: rgba(12, 14, 17, 0.78);
@@ -68,12 +69,15 @@ canvas#game {
 .panel > * { position: relative; }
 
 .panel.small { width: min(680px, 100%); text-align: center; }
-.panel.title { text-align: center; }
+.panel.title { text-align: center; margin-top: 64px; } /* room for the logo that sticks out above */
 
 h1, h2, h3 { margin: 0; font-family: var(--display); font-weight: 400; letter-spacing: 0.03em; }
 
 h1 { font-size: clamp(44px, 9vw, 84px); line-height: 1; margin-top: 10px; }
-h1 span { color: var(--yellow); }
+/* The game logo on the title screen. It straddles the top edge of the panel like a sign bolted
+   onto it, which is what the negative top margin is for. */
+h1.logo { margin: -78px 0 6px; }
+h1.logo img { display: block; width: min(460px, 88%); height: auto; margin: 0 auto; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55)); }
 h1.win { color: var(--good); font-size: clamp(36px, 7vw, 60px); }
 h1.lose { color: var(--bad); font-size: clamp(36px, 7vw, 60px); }
 h2 { font-size: 34px; text-transform: uppercase; }
@@ -239,4 +243,6 @@ kbd {
   .cards, .cards.three { grid-template-columns: repeat(2, 1fr); }
   .loadout { grid-template-columns: 1fr; gap: 16px; }
   .panel { padding: 2px 0 0; }
+  .panel.title { margin-top: 0; }
+  h1.logo { margin-top: 0; }
 }

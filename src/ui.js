@@ -64,7 +64,7 @@ export function title(onStart) {
     .join('');
   show(`
     <div class="panel title">
-      <h1>OVER<span>ARMED</span></h1>
+      <h1 class="logo"><img src="assets/ui/logo.png" alt="Overarmed"></h1>
       <p class="tag">Six arms. One job. The robots can't have it.</p>
       <h3>What does Buddy bring to his first shift?</h3>
       <div class="cards three">${cards}</div>
