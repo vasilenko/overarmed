@@ -3,7 +3,7 @@
 
 import {
   W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS, OBSTACLES, LAYOUT, BELT,
-  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, FLASH_TIME, BLAST_TIME, waveCfg,
+  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, MELEE_FX, FLASH_TIME, BLAST_TIME, waveCfg,
 } from './data.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -25,7 +25,8 @@ export function newGame(starter) {
     stats: { ...BASE_STATS },
     arms: ARM_SLOTS.map((s) => ({
       id: null, lvl: 1, cd: 0, aim: s.ang, target: null,
-      swing: -1, dir: 0, flip: 1, hit: null,
+      // an attack in progress: swing runs 0..1 over dur seconds, move is its kind, victim its target
+      swing: -1, dur: 0, move: null, victim: null, dir: 0, flip: 1, hit: null,
       x: 0, y: 0, bx: 0, by: 0,
     })),
     items: {},
@@ -41,6 +42,9 @@ export function newGame(starter) {
     texts: [],
     flashes: [], // muzzle flashes, they live for a fraction of a second
     blasts: [], // barrel explosions still on screen
+    impacts: [], // bursts where a heavy blow landed
+    slashes: [], // sword trails
+    hitStop: 0, // seconds left of the freeze after a bat hit
     boss: null,
     shake: 0,
     hudPop: 0, // the nut counter pulses on pickup, from 1 down to 0
@@ -244,6 +248,10 @@ export function nextWave(g) {
 // ---------- update ----------
 
 export function update(g, dt, input) {
+  if (g.hitStop > 0) {
+    g.hitStop -= dt; // everything holds still for an instant after a heavy blow
+    return;
+  }
   g.time += dt;
   g.shake = Math.max(0, g.shake - dt);
   g.hudPop = Math.max(0, g.hudPop - dt * 4);
@@ -352,32 +360,13 @@ function stepArms(g, dt) {
     const melee = def.kind === 'melee';
     a.cd -= dt * s.rate;
 
-    // a swing is in progress: the weapon sweeps an arc around the fist and hits everyone it touches
+    // an attack is in progress
     if (a.swing >= 0) {
-      a.swing = Math.min(1, a.swing + dt / def.time);
-      // the fist briefly lunges toward the target and comes back
-      const lunge = Math.sin(a.swing * Math.PI) * LUNGE;
-      a.x = a.bx + Math.cos(a.dir) * lunge;
-      a.y = a.by + Math.sin(a.dir) * lunge;
-      a.aim = a.dir + (a.swing - 0.5) * def.arc * a.flip;
-      const tipX = a.x + Math.cos(a.aim) * def.len;
-      const tipY = a.y + Math.sin(a.aim) * def.len;
+      a.swing = Math.min(1, a.swing + dt / a.dur);
       const dmg = weaponDmg(g, a);
-      for (const e of g.enemies) {
-        if (e.dead || a.hit.has(e)) continue;
-        if (segDist(e.x, e.y, a.x, a.y, tipX, tipY) < e.r + 6) {
-          a.hit.add(e);
-          hurtEnemy(g, e, dmg, a.aim, def.knock);
-        }
-      }
-      // a swing sets off barrels too
-      for (const o of g.obstacles) {
-        if (o.hp === Infinity || o.dead || a.hit.has(o)) continue;
-        if (segDist(o.x, o.y, a.x, a.y, tipX, tipY) < o.r + 6) {
-          a.hit.add(o);
-          hitObstacle(g, o, dmg);
-        }
-      }
+      if (a.move === 'smash') stepSmash(g, a, def, dmg);
+      else if (a.move === 'stab') stepStab(g, a, def, dmg);
+      else stepSweep(g, a, def, a.move === 'slash' ? (dmg * def.slashDmg) / def.dmg : dmg);
       if (a.swing >= 1) {
         a.swing = -1;
         a.aim = a.dir;
@@ -402,9 +391,23 @@ function stepArms(g, dt) {
       a.cd = def.cd;
       a.swing = 0;
       a.dir = a.aim;
-      a.flip = -a.flip; // every next swing goes the opposite way
+      a.flip = -a.flip; // every next attack goes the opposite way
       a.hit = new Set();
-      g.sfx.push('swing');
+      a.victim = t;
+      a.move = def.move;
+      if (def.move === 'blade') {
+        // a lone robot gets stabbed; a crowd within reach gets the wide slash
+        const reach = def.len + LUNGE;
+        const near = g.enemies.filter((e) => !e.dead && Math.hypot(e.x - a.bx, e.y - a.by) - e.r < reach).length;
+        a.move = near >= def.crowd ? 'slash' : 'stab';
+      }
+      a.dur = a.move === 'slash' ? def.slashTime : def.time;
+      if (a.move === 'slash') {
+        g.slashes.push({ arm: a, dir: a.dir, arc: def.arc, flip: a.flip, len: def.len, dur: a.dur, t: 0 });
+        g.sfx.push('slash');
+      } else {
+        g.sfx.push('swing');
+      }
     } else {
       a.cd = def.cd;
       const dmg = weaponDmg(g, a);
@@ -436,6 +439,97 @@ function stepArms(g, dt) {
       g.sfx.push('shoot');
     }
   }
+}
+
+// Moves the fist `lunge` pixels along the attack direction and points the weapon at `aim`.
+function poseAttack(a, lunge, aim) {
+  a.x = a.bx + Math.cos(a.dir) * lunge;
+  a.y = a.by + Math.sin(a.dir) * lunge;
+  a.aim = aim;
+}
+
+// Whether the weapon, pointing at angle `ang` from the fist, touches a round body.
+function reaches(a, def, body, pad, ang) {
+  return segDist(body.x, body.y, a.x, a.y, a.x + Math.cos(ang) * def.len, a.y + Math.sin(ang) * def.len) < body.r + pad;
+}
+
+// A sweeping attack — the sword slash and the chainsaw: the weapon passes through an arc and hits
+// every robot and every barrel it touches, each of them once.
+function stepSweep(g, a, def, dmg) {
+  const k = a.swing;
+  poseAttack(a, Math.sin(k * Math.PI) * LUNGE, a.dir + (k - 0.5) * def.arc * a.flip);
+  for (const e of g.enemies) {
+    if (e.dead || a.hit.has(e) || !reaches(a, def, e, 6, a.aim)) continue;
+    a.hit.add(e);
+    hurtEnemy(g, e, dmg, a.aim, def.knock);
+  }
+  for (const o of g.obstacles) {
+    if (o.hp === Infinity || o.dead || a.hit.has(o) || !reaches(a, def, o, 6, a.aim)) continue;
+    a.hit.add(o);
+    hitObstacle(g, o, dmg);
+  }
+}
+
+// What a single-target attack lands on: the robot it was aimed at if the weapon reaches it,
+// otherwise whichever robot is under the weapon, otherwise a barrel in the way.
+function struck(g, a, def) {
+  if (a.victim && !a.victim.dead && reaches(a, def, a.victim, 8, a.dir)) return a.victim;
+  return g.enemies.find((e) => !e.dead && reaches(a, def, e, 6, a.dir))
+    || g.obstacles.find((o) => o.hp !== Infinity && !o.dead && reaches(a, def, o, 6, a.dir))
+    || null;
+}
+
+// The sword stab: a quick thrust straight at the target that hits exactly one thing.
+function stepStab(g, a, def, dmg) {
+  const k = a.swing;
+  poseAttack(a, Math.sin(k * Math.PI) * MELEE_FX.stabLunge, a.dir);
+  if (k < 0.35 || a.hit.size) return;
+  const hit = struck(g, a, def);
+  if (!hit) return;
+  a.hit.add(hit);
+  if (hit.kind) {
+    hitObstacle(g, hit, dmg); // obstacles have a kind, robots have a type
+  } else {
+    hurtEnemy(g, hit, dmg, a.dir, def.knock);
+    g.impacts.push({ x: hit.x, y: hit.y, big: false, t: 0 });
+  }
+}
+
+// The bat smash: the bat is pulled back, whipped forward into one robot and then recovers.
+// The blow lands at the end of the whip; the game freezes for an instant when it does.
+function stepSmash(g, a, def, dmg) {
+  const k = a.swing;
+  const back = def.windup * a.flip;
+  const over = 0.3 * a.flip; // how far the bat follows through past the target
+  let turn;
+  let lunge;
+  if (k < 0.45) {
+    const u = 1 - (1 - k / 0.45) ** 2;
+    turn = -back * u;
+    lunge = -5 * u;
+  } else if (k < 0.62) {
+    const u = (k - 0.45) / 0.17;
+    turn = -back + (back + over) * u;
+    lunge = -5 + (LUNGE + 5) * u;
+  } else {
+    const u = (k - 0.62) / 0.38;
+    turn = over * (1 - u);
+    lunge = LUNGE * (1 - u);
+  }
+  poseAttack(a, lunge, a.dir + turn);
+  if (k < 0.6 || a.hit.size) return;
+  const hit = struck(g, a, def);
+  if (!hit) return;
+  a.hit.add(hit);
+  if (hit.kind) {
+    hitObstacle(g, hit, dmg);
+    return;
+  }
+  hurtEnemy(g, hit, dmg, a.dir, def.knock);
+  g.impacts.push({ x: hit.x, y: hit.y, big: true, t: 0 });
+  g.shake = Math.max(g.shake, 0.14);
+  g.hitStop = MELEE_FX.hitStop;
+  g.sfx.push('smash');
 }
 
 function stepShots(g, dt) {
@@ -804,6 +898,10 @@ function stepFx(g, dt) {
     t.y -= 40 * dt;
   }
   g.texts = g.texts.filter((t) => t.t < 0.6);
+  for (const m of g.impacts) m.t += dt;
+  g.impacts = g.impacts.filter((m) => m.t < MELEE_FX.impact);
+  for (const sl of g.slashes) sl.t += dt;
+  g.slashes = g.slashes.filter((sl) => sl.t < sl.dur + MELEE_FX.slashFade);
   for (const b of g.blasts) b.t += dt;
   g.blasts = g.blasts.filter((b) => b.t < BLAST_TIME);
   for (const f of g.flashes) f.t += dt;

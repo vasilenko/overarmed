@@ -20,6 +20,8 @@ const SOUNDS = {
   wave: ['triangle', 440, 880, 0.35, 0.08],
   win: ['triangle', 520, 1560, 0.8, 0.1],
   blast: ['sawtooth', 95, 28, 0.45, 0.16],
+  smash: ['square', 150, 45, 0.18, 0.13],
+  slash: ['triangle', 1000, 320, 0.11, 0.06],
 };
 
 export function play(name) {

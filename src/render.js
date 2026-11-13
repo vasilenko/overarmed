@@ -1,6 +1,6 @@
 // All drawing on the canvas: sprites for the characters, weapons and arena, shapes for the rest.
 
-import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, BELT } from './data.js';
+import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, BELT, MELEE_FX } from './data.js';
 
 const INK = '#1b1d21';
 
@@ -456,6 +456,56 @@ function drawObstacle(c, o) {
   }
 }
 
+// The trail of a sword slash: a bright crescent from where the swing began to where the blade is
+// now. It follows the fist, stays for the whole swing and then fades.
+function drawSlash(c, sl) {
+  const a = sl.arm;
+  const k = Math.min(1, sl.t / sl.dur);
+  const fade = sl.t < sl.dur ? 1 : 1 - (sl.t - sl.dur) / MELEE_FX.slashFade;
+  const from = sl.dir - (sl.arc / 2) * sl.flip;
+  const to = sl.dir + (k - 0.5) * sl.arc * sl.flip;
+  c.lineCap = 'round';
+  // three layers, each covering a shorter and more recent part of the arc: the trail thins toward its tail
+  for (const [part, width, alpha] of [[1, 0.5, 0.22], [0.6, 0.38, 0.32], [0.3, 0.24, 0.5]]) {
+    c.beginPath();
+    c.arc(a.bx, a.by, sl.len * 0.8, to - (to - from) * part, to, sl.flip < 0);
+    c.lineWidth = sl.len * width;
+    c.strokeStyle = `rgba(235, 244, 255, ${alpha * fade})`;
+    c.stroke();
+  }
+  // the bright edge the blade tip draws
+  c.beginPath();
+  c.arc(a.bx, a.by, sl.len * 1.02, from, to, sl.flip < 0);
+  c.lineWidth = 2.5;
+  c.strokeStyle = `rgba(255, 255, 255, ${0.9 * fade})`;
+  c.stroke();
+}
+
+// The burst where a blow landed: a spiky star that pops and fades. The bat's is big, the stab's small.
+function drawImpact(c, m) {
+  const k = m.t / MELEE_FX.impact;
+  const r = (m.big ? 30 : 13) * (0.45 + 0.55 * (1 - (1 - k) ** 3));
+  c.save();
+  c.translate(m.x, m.y);
+  c.rotate(m.x); // each burst gets its own turn so they do not all look stamped
+  c.globalAlpha = 1 - k * k;
+  c.beginPath();
+  const spikes = m.big ? 9 : 6;
+  for (let i = 0; i < spikes * 2; i++) {
+    const ang = (i / (spikes * 2)) * Math.PI * 2;
+    const rr = i % 2 ? r * 0.45 : r;
+    c.lineTo(Math.cos(ang) * rr, Math.sin(ang) * rr);
+  }
+  c.closePath();
+  c.fillStyle = '#fff6d6';
+  c.fill();
+  c.lineWidth = m.big ? 3 : 2;
+  c.lineJoin = 'round';
+  c.strokeStyle = '#ffb21a';
+  c.stroke();
+  c.restore();
+}
+
 // A barrel explosion: a white-hot flash for the first instant, then the fireball sprite that swells
 // past the blast radius and fades out.
 function drawBlast(c, b) {
@@ -601,6 +651,8 @@ export function draw(c, g) {
   queue.sort((a, b) => a.y - b.y);
   for (const item of queue) item.draw();
   drawFenceFront(c);
+  for (const sl of g.slashes) drawSlash(c, sl);
+  for (const m of g.impacts) drawImpact(c, m);
   for (const b of g.blasts) drawBlast(c, b);
   for (const s of g.shots) drawShot(c, s);
   for (const f of g.flashes) drawFlash(c, f);

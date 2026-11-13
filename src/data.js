@@ -21,6 +21,12 @@ export const ARM_SLOTS = [
 // How far the fist lunges toward the target when a melee weapon strikes.
 export const LUNGE = 12;
 
+// Timing and reach of melee effects: impact — how long the hit burst stays, in seconds;
+// slashFade — how long the sword trail lingers after the slash; hitStop — the tiny freeze of the
+// whole game when the bat lands, which is what makes the blow feel heavy; stabLunge — how far the
+// fist goes forward in a sword stab.
+export const MELEE_FX = { impact: 0.2, slashFade: 0.14, hitStop: 0.05, stabLunge: 20 };
+
 // How many seconds the muzzle flash stays visible after a shot.
 export const FLASH_TIME = 0.07;
 
@@ -56,8 +62,13 @@ export const DROP_REST = 0.45;
 
 // cd — pause between attacks in seconds, range — in arena pixels.
 // muzzle — where the sprite's muzzle is relative to the fist: [forward, down]; negative is above the fist.
-// Melee weapons hit with a swing: len — length from fist to tip, arc — width of the arc in radians,
-// time — how long the swing lasts, range — how close to the fist a robot must come to get hit.
+// Melee weapons: len — length from fist to tip, range — how close to the fist a robot must come
+// to be attacked, time — how long one attack lasts, move — how the weapon attacks:
+//   smash — the bat: a wind-up and one heavy blow to a single robot; windup is how far the bat
+//           is pulled back, in radians;
+//   blade — the sword: it stabs a lone robot, but when `crowd` or more robots are within reach it
+//           slashes all of them in a wide arc instead; slashDmg, slashTime and arc describe the slash;
+//   saw   — the chainsaw: holds the bar on the target and grinds whatever touches it; arc is its wobble.
 export const WEAPONS = {
   revolver: {
     name: 'Revolver', kind: 'ranged', starter: true, cost: 22,
@@ -67,13 +78,14 @@ export const WEAPONS = {
   },
   bat: {
     name: 'Bat', kind: 'melee', starter: true, cost: 20,
-    dmg: 22, cd: 0.85, range: 52, len: 38, arc: 2.4, time: 0.2, knock: 300,
-    blurb: 'A wide swing that knocks robots back.',
+    dmg: 34, cd: 0.8, range: 52, len: 38, move: 'smash', windup: 1.1, time: 0.28, knock: 460,
+    blurb: 'One heavy blow to a single robot. Sends it flying.',
   },
   sword: {
     name: 'Sword', kind: 'melee', starter: true, cost: 20,
-    dmg: 10, cd: 0.5, range: 52, len: 38, arc: 1.7, time: 0.16, knock: 60,
-    blurb: 'Fast slashes, one way and then the other.',
+    dmg: 14, cd: 0.5, range: 52, len: 38, move: 'blade', time: 0.15, knock: 60,
+    crowd: 2, slashDmg: 9, slashTime: 0.2, arc: 2.6,
+    blurb: 'Stabs a lone robot, slashes wide when they crowd in.',
   },
   rifle: {
     name: 'Assault Rifle', kind: 'ranged', cost: 30,
@@ -89,7 +101,7 @@ export const WEAPONS = {
   },
   chainsaw: {
     name: 'Chainsaw', kind: 'melee', cost: 32,
-    dmg: 6, cd: 0.24, range: 48, len: 38, arc: 0.3, time: 0.2, knock: 30,
+    dmg: 6, cd: 0.24, range: 48, len: 38, move: 'saw', arc: 0.3, time: 0.2, knock: 30,
     blurb: 'Saws through anything that gets close.',
   },
 };
