@@ -1,6 +1,6 @@
 // All drawing on the canvas: sprites for the characters, weapons and arena, shapes for the rest.
 
-import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, ARC_TIME, BELT, MELEE_FX } from './data.js';
+import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, ARC_TIME, PUFF_TIME, BELT, MELEE_FX } from './data.js';
 
 const INK = '#1b1d21';
 
@@ -62,6 +62,7 @@ const WEAPON_ART = {
   chainsaw: { grip: [0.22, 0.637] },
   cables: { grip: [0.343, 0.41] },
   wrench: { grip: [0.34, 0.52] },
+  extinguisher: { grip: [0.288, 0.5] },
 };
 for (const [id, art] of Object.entries(WEAPON_ART)) art.img = loadImage(`assets/weapons/${id}.png`);
 
@@ -325,6 +326,16 @@ function drawEnemy(c, e, g) {
     c.drawImage(art.white, -w / 2, -h / 2, w, h);
     c.globalAlpha = 1;
   }
+  if (e.slow > 0) {
+    // a slowed robot is caked with blobs of foam; they melt as the effect wears off
+    c.fillStyle = `rgba(255, 255, 255, ${0.9 * Math.min(1, e.slow / 0.3)})`;
+    for (let i = 0; i < 5; i++) {
+      const spot = e.seed * 7 + i * 1.9;
+      c.beginPath();
+      c.arc(Math.cos(spot) * w * 0.3, h * 0.08 + Math.sin(spot * 1.3) * h * 0.26, 3 + (i % 3), 0, 7);
+      c.fill();
+    }
+  }
   c.restore();
 
   // a health bar for those that take a long time to beat
@@ -490,6 +501,18 @@ function drawSlash(c, sl) {
   c.lineWidth = 2.5;
   c.strokeStyle = `rgba(255, 255, 255, ${0.9 * fade})`;
   c.stroke();
+}
+
+// A puff of foam from the fire extinguisher: it shoots out fast, slows down, swells and melts.
+function drawPuff(c, puff) {
+  const k = puff.t / PUFF_TIME;
+  const far = 1 - (1 - k) ** 2;
+  c.globalAlpha = 0.85 * (1 - k * k);
+  c.fillStyle = '#f4f8fb';
+  c.beginPath();
+  c.arc(puff.x + puff.dx * far, puff.y + puff.dy * far, puff.size * (1 + 2.2 * k), 0, 7);
+  c.fill();
+  c.globalAlpha = 1;
 }
 
 // Lightning from the jumper cables: a jagged line through every robot the charge jumped to.
@@ -699,6 +722,7 @@ export function draw(c, g) {
   for (const sl of g.slashes) drawSlash(c, sl);
   for (const m of g.impacts) drawImpact(c, m);
   for (const b of g.blasts) drawBlast(c, b);
+  for (const puff of g.puffs) drawPuff(c, puff);
   for (const arc of g.arcs) drawArc(c, arc);
   for (const s of g.shots) drawShot(c, s);
   for (const f of g.flashes) drawFlash(c, f);

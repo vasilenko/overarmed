@@ -3,7 +3,7 @@
 
 import {
   W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS, OBSTACLES, LAYOUT, BELT,
-  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, MELEE_FX, FLASH_TIME, BLAST_TIME, ARC_TIME, waveCfg,
+  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, MELEE_FX, FLASH_TIME, BLAST_TIME, ARC_TIME, SLOW, PUFF_TIME, waveCfg,
 } from './data.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -46,6 +46,7 @@ export function newGame(starter) {
     impacts: [], // bursts where a heavy blow landed
     slashes: [], // sword trails
     arcs: [], // lightning from the jumper cables
+    puffs: [], // foam from the fire extinguisher
     hitStop: 0, // seconds left of the freeze after a bat hit
     boss: null,
     shake: 0,
@@ -421,6 +422,7 @@ function stepArms(g, dt) {
       const my = a.by + Math.sin(a.aim) * fwd + Math.cos(a.aim) * side;
       if (def.move === 'zap') zap(g, def, t, dmg, mx, my);
       else if (def.move === 'throw') hurl(g, a, def, dmg, range, mx, my);
+      else if (def.move === 'spray') spray(g, a, def, dmg, range, mx, my);
       else shoot(g, a, def, dmg, range, mx, my);
     }
   }
@@ -571,6 +573,35 @@ function stepSmash(g, a, def, dmg) {
   g.sfx.push('smash');
 }
 
+// Robots inside a cone that opens from the point x, y along `ang`: closer than `range`, no more
+// than `half` radians off the axis, and not behind solid cover.
+function inCone(g, x, y, ang, range, half) {
+  return g.enemies.filter((e) => {
+    if (e.dead) return false;
+    const d = Math.hypot(e.x - x, e.y - y);
+    if (d - e.r > range) return false;
+    const off = Math.atan2(e.y - y, e.x - x) - ang;
+    // a wide body counts as soon as its edge is in the cone, not only its centre
+    const wide = half + Math.atan2(e.r, Math.max(d, 1));
+    return Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= wide && !hidden(g, x, y, e.x, e.y);
+  });
+}
+
+// The fire extinguisher: every robot in the cone of foam is shoved along the jet and slowed down.
+function spray(g, a, def, dmg, range, x, y) {
+  for (const e of inCone(g, x, y, a.aim, range, def.cone)) {
+    hurtEnemy(g, e, dmg, a.aim, def.knock, true);
+    e.slow = def.slow;
+  }
+  // the foam itself is only for show: puffs that fly out to the end of the cone and melt
+  for (let i = 0; i < 5 && g.puffs.length < 160; i++) {
+    const ang = a.aim + rand(-def.cone, def.cone);
+    const reach = range * rand(0.6, 1);
+    g.puffs.push({ x, y, dx: Math.cos(ang) * reach, dy: Math.sin(ang) * reach, size: rand(3, 5), t: 0 });
+  }
+  g.sfx.push('hiss');
+}
+
 // The boomerang wrench leaves the hand. It is a shot that remembers its hand: `out` is how far
 // it still has to fly before it turns back.
 function hurl(g, a, def, dmg, range, x, y) {
@@ -656,15 +687,18 @@ function stepShots(g, dt) {
   g.shots = g.shots.filter((s) => s.life > 0);
 }
 
-function hurtEnemy(g, e, dmg, ang, knock) {
+// quiet — no damage number and no hit sound: for weapons that tick many times a second.
+function hurtEnemy(g, e, dmg, ang, knock, quiet = false) {
   dmg = Math.max(1, Math.round(dmg));
   e.hp -= dmg;
-  e.flash = 0.1;
   const k = knock / ENEMIES[e.type].mass;
   e.kx += Math.cos(ang) * k;
   e.ky += Math.sin(ang) * k;
-  floatText(g, e.x + rand(-6, 6), e.y - e.r, String(dmg), '#ffffff');
-  g.sfx.push('hit');
+  if (!quiet) {
+    e.flash = 0.1;
+    floatText(g, e.x + rand(-6, 6), e.y - e.r, String(dmg), '#ffffff');
+    g.sfx.push('hit');
+  }
   if (e.hp <= 0) kill(g, e);
 }
 
@@ -724,8 +758,10 @@ function stepEnemies(g, dt) {
 
     // walking robots go around obstacles, flying ones pass over them
     if (!def.flies) [vx, vy] = steerAround(g, e, vx, vy);
-    e.x += (vx * e.speed + e.kx) * dt;
-    e.y += (vy * e.speed + e.ky) * dt;
+    const pace = e.slow > 0 && ai !== 'boss' ? SLOW : 1; // foam and magnets slow a robot down
+    if (e.slow > 0) e.slow -= dt;
+    e.x += (vx * e.speed * pace + e.kx) * dt;
+    e.y += (vy * e.speed * pace + e.ky) * dt;
     if (!def.flies) {
       carry(g, e, dt, Math.min(BELT.speed, e.speed * BELT.grip));
       pushOut(g, e, e.r);
@@ -859,6 +895,7 @@ function spawnEnemy(g, type, x, y) {
     dmg: d.dmg * (scaled ? g.cfg.dmgMul : 1),
     speed: d.speed * rand(0.9, 1.1),
     kx: 0, ky: 0, flash: 0,
+    slow: 0, // seconds left of being slowed down
     cd: rand(1, 2.5),
     strafe: Math.random() < 0.5 ? -1 : 1,
     in: false, dead: false,
@@ -1005,6 +1042,8 @@ function stepFx(g, dt) {
   g.slashes = g.slashes.filter((sl) => sl.t < sl.dur + MELEE_FX.slashFade);
   for (const b of g.blasts) b.t += dt;
   g.blasts = g.blasts.filter((b) => b.t < BLAST_TIME);
+  for (const puff of g.puffs) puff.t += dt;
+  g.puffs = g.puffs.filter((puff) => puff.t < PUFF_TIME);
   for (const arc of g.arcs) arc.t += dt;
   g.arcs = g.arcs.filter((arc) => arc.t < ARC_TIME);
   for (const f of g.flashes) f.t += dt;

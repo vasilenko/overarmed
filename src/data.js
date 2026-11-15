@@ -75,7 +75,9 @@ export const DROP_REST = 0.45;
 //           of the damage;
 //   throw — the boomerang wrench: it flies out past `range`, slowing down, and hits every robot on
 //           its way; then it flies back into the hand, pulled in with the acceleration `pull`,
-//           and hits them again. The hand is empty meanwhile, and cd only starts at the catch.
+//           and hits them again. The hand is empty meanwhile, and cd only starts at the catch;
+//   spray — the fire extinguisher: a short cone of foam that opens `cone` radians to each side of
+//           the aim. Every robot in it is shoved away and slowed down for `slow` seconds.
 export const WEAPONS = {
   revolver: {
     name: 'Revolver', kind: 'ranged', starter: true, cost: 22,
@@ -123,10 +125,21 @@ export const WEAPONS = {
     muzzle: [14, 0],
     blurb: 'Flies out and comes back. Hits everything in its way, twice.',
   },
+  extinguisher: {
+    name: 'Fire Extinguisher', kind: 'ranged', cost: 24,
+    dmg: 1, cd: 0.15, range: 140, move: 'spray', cone: 0.35, knock: 90, slow: 1.2,
+    muzzle: [29, 0],
+    blurb: 'Foam shoves robots back and slows them down. Barely scratches them.',
+  },
 };
 
 // How many seconds a lightning arc from the jumper cables stays on screen.
 export const ARC_TIME = 0.14;
+
+// A slowed robot moves at this share of its speed. The Director is too heavy to be slowed.
+export const SLOW = 0.45;
+// How many seconds a puff of foam flies before it melts away.
+export const PUFF_TIME = 0.4;
 
 // mass — how hard it is to push back. ai: chase goes for the player, shooter keeps its distance.
 // flies — the robot passes over obstacles instead of walking around them.

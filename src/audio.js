@@ -24,6 +24,7 @@ const SOUNDS = {
   slash: ['triangle', 1000, 320, 0.11, 0.06],
   zap: ['sawtooth', 1700, 240, 0.13, 0.05],
   catch: ['sine', 520, 780, 0.05, 0.05],
+  hiss: ['sawtooth', 3200, 2400, 0.07, 0.012],
 };
 
 export function play(name) {
