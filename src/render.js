@@ -63,8 +63,8 @@ const WEAPON_ART = {
   cables: { grip: [0.343, 0.41] },
   wrench: { grip: [0.34, 0.52] },
   extinguisher: { grip: [0.288, 0.5] },
-  horseshoe: { grip: [0.238, 0.5] },
-  microwave: { grip: [0.278, 0.5] },
+  horseshoe: { grip: [0.416, 0.503] },
+  microwave: { grip: [0.342, 0.515] },
 };
 for (const [id, art] of Object.entries(WEAPON_ART)) art.img = loadImage(`assets/weapons/${id}.png`);
 
