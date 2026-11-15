@@ -80,7 +80,11 @@ export const DROP_REST = 0.45;
 //           the aim. Every robot in it is shoved away and slowed down for `slow` seconds;
 //   pull  — the horseshoe magnet: it picks the robot in range with the most neighbours and yanks
 //           every robot within `field` pixels of it into one heap around it. Heavy robots move
-//           less. The whole heap is slowed down for `slow` seconds.
+//           less. The whole heap is slowed down for `slow` seconds;
+//   cook  — the microwave: it heats every robot in a cone, `cone` radians to each side of the aim.
+//           A robot gains `heatUp` heat per tick, up to 1, and at full heat takes 1 + `ramp` times
+//           the damage; out of the beam it cools down again. A robot finished off by the heat pops:
+//           robots within `pop` pixels take `popDmg`, and those that die of it pop as well.
 export const WEAPONS = {
   revolver: {
     name: 'Revolver', kind: 'ranged', starter: true, cost: 22,
@@ -140,6 +144,12 @@ export const WEAPONS = {
     muzzle: [30, 0],
     blurb: 'Yanks robots into one tight heap. Sets them up for your other hands.',
   },
+  microwave: {
+    name: 'Microwave', kind: 'ranged', cost: 34,
+    dmg: 2, cd: 0.2, range: 150, move: 'cook', cone: 0.4, heatUp: 0.15, ramp: 2, pop: 55, popDmg: 10, knock: 0,
+    muzzle: [30, 0],
+    blurb: 'The longer a robot sits in the beam, the more it hurts. Then it pops.',
+  },
 };
 
 // How many seconds a lightning arc from the jumper cables stays on screen.
@@ -149,6 +159,9 @@ export const ARC_TIME = 0.14;
 export const SLOW = 0.45;
 // How many seconds a puff of foam flies before it melts away.
 export const PUFF_TIME = 0.4;
+// Heat a robot loses per second once the microwave is off it, and how long a wave of the beam lives.
+export const COOL = 0.5;
+export const WAVE_TIME = 0.4;
 // How many seconds the rings of the magnet's field take to close in on the heap.
 export const RING_TIME = 0.3;
 

@@ -26,6 +26,8 @@ const SOUNDS = {
   catch: ['sine', 520, 780, 0.05, 0.05],
   hiss: ['sawtooth', 3200, 2400, 0.07, 0.012],
   hum: ['sine', 90, 240, 0.28, 0.1],
+  buzz: ['square', 62, 66, 0.2, 0.018],
+  pop: ['square', 420, 1500, 0.07, 0.08],
 };
 
 export function play(name) {

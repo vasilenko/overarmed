@@ -3,7 +3,7 @@
 
 import {
   W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS, OBSTACLES, LAYOUT, BELT,
-  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, MELEE_FX, FLASH_TIME, BLAST_TIME, ARC_TIME, SLOW, PUFF_TIME, RING_TIME, waveCfg,
+  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, MELEE_FX, FLASH_TIME, BLAST_TIME, ARC_TIME, SLOW, PUFF_TIME, RING_TIME, COOL, WAVE_TIME, waveCfg,
 } from './data.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -52,6 +52,7 @@ export function newGame(starter) {
     arcs: [], // lightning from the jumper cables
     puffs: [], // foam from the fire extinguisher
     rings: [], // the magnet's field closing in on a heap
+    waves: [], // the microwave's beam
     hitStop: 0, // seconds left of the freeze after a bat hit
     boss: null,
     shake: 0,
@@ -429,6 +430,7 @@ function stepArms(g, dt) {
       else if (def.move === 'throw') hurl(g, a, def, dmg, range, mx, my);
       else if (def.move === 'spray') spray(g, a, def, dmg, range, mx, my);
       else if (def.move === 'pull') pull(g, a, def, dmg, range);
+      else if (def.move === 'cook') cook(g, a, def, dmg, range, mx, my);
       else shoot(g, a, def, dmg, range, mx, my);
     }
   }
@@ -579,18 +581,51 @@ function stepSmash(g, a, def, dmg) {
   g.sfx.push('smash');
 }
 
-// Robots inside a cone that opens from the point x, y along `ang`: closer than `range`, no more
-// than `half` radians off the axis, and not behind solid cover.
-function inCone(g, x, y, ang, range, half) {
-  return g.enemies.filter((e) => {
-    if (e.dead) return false;
-    const d = Math.hypot(e.x - x, e.y - y);
-    if (d - e.r > range) return false;
-    const off = Math.atan2(e.y - y, e.x - x) - ang;
-    // a wide body counts as soon as its edge is in the cone, not only its centre
-    const wide = half + Math.atan2(e.r, Math.max(d, 1));
-    return Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= wide && !hidden(g, x, y, e.x, e.y);
-  });
+// Whether a round body is inside a cone that opens from the point x, y along `ang`: closer than
+// `range`, no more than `half` radians off the axis, and not behind solid cover.
+function coneHas(g, x, y, ang, range, half, body) {
+  const d = Math.hypot(body.x - x, body.y - y);
+  if (d - body.r > range) return false;
+  const off = Math.atan2(body.y - y, body.x - x) - ang;
+  // a wide body counts as soon as its edge is in the cone, not only its centre
+  const wide = half + Math.atan2(body.r, Math.max(d, 1));
+  return Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= wide && !hidden(g, x, y, body.x, body.y);
+}
+
+const inCone = (g, x, y, ang, range, half) => g.enemies.filter((e) => !e.dead && coneHas(g, x, y, ang, range, half, e));
+
+// The microwave: every robot in the beam gets hotter with each tick and takes more damage the
+// hotter it is. A barrel in the beam heats up too, until it goes off.
+function cook(g, a, def, dmg, range, x, y) {
+  for (const e of inCone(g, x, y, a.aim, range, def.cone)) {
+    if (e.dead) continue; // a neighbour's pop may have got it already
+    e.heat = Math.min(1, (e.heat || 0) + def.heatUp);
+    e.cooking = def.cd + 0.1; // it does not cool down while the beam keeps coming
+    hurtEnemy(g, e, dmg * (1 + def.ramp * e.heat), a.aim, def.knock, true);
+    if (e.dead) pop(g, e, def, (def.popDmg * dmg) / def.dmg);
+  }
+  for (const o of g.obstacles) {
+    if (o.hp !== Infinity && !o.dead && coneHas(g, x, y, a.aim, range, def.cone, o)) hitObstacle(g, o, dmg);
+  }
+  g.waves.push({ x, y, ang: a.aim, range, half: def.cone, t: 0 });
+  g.sfx.push('buzz');
+}
+
+// A robot cooked to the end pops like popcorn and hurts the robots around it; those that die of
+// it pop too, so a tight crowd can go off in a chain.
+function pop(g, first, def, dmg) {
+  const queue = [first];
+  while (queue.length) {
+    const e = queue.shift();
+    g.impacts.push({ x: e.x, y: e.y, big: true, t: 0 });
+    burst(g, e.x, e.y, '#fff3c4', 8);
+    g.sfx.push('pop');
+    for (const o of g.enemies) {
+      if (o.dead || Math.hypot(o.x - e.x, o.y - e.y) - o.r >= def.pop) continue;
+      hurtEnemy(g, o, dmg, Math.atan2(o.y - e.y, o.x - e.x), 160);
+      if (o.dead) queue.push(o);
+    }
+  }
 }
 
 // The fire extinguisher: every robot in the cone of foam is shoved along the jet and slowed down.
@@ -796,6 +831,8 @@ function stepEnemies(g, dt) {
     const pace = e.slow > 0 && ai !== 'boss' ? SLOW : 1; // foam and magnets slow a robot down
     if (e.slow > 0) e.slow -= dt;
     else e.foam = false;
+    if (e.cooking > 0) e.cooking -= dt;
+    else if (e.heat > 0) e.heat = Math.max(0, e.heat - COOL * dt);
     e.x += (vx * e.speed * pace + e.kx) * dt;
     e.y += (vy * e.speed * pace + e.ky) * dt;
     if (!def.flies) {
@@ -933,6 +970,8 @@ function spawnEnemy(g, type, x, y) {
     kx: 0, ky: 0, flash: 0,
     slow: 0, // seconds left of being slowed down
     foam: false, // whether it was foam that slowed it
+    heat: 0, // how hot the microwave has made it, from 0 to 1
+    cooking: 0, // seconds until it starts to cool down
     cd: rand(1, 2.5),
     strafe: Math.random() < 0.5 ? -1 : 1,
     in: false, dead: false,
@@ -1079,6 +1118,8 @@ function stepFx(g, dt) {
   g.slashes = g.slashes.filter((sl) => sl.t < sl.dur + MELEE_FX.slashFade);
   for (const b of g.blasts) b.t += dt;
   g.blasts = g.blasts.filter((b) => b.t < BLAST_TIME);
+  for (const wave of g.waves) wave.t += dt;
+  g.waves = g.waves.filter((wave) => wave.t < WAVE_TIME);
   for (const ring of g.rings) ring.t += dt;
   g.rings = g.rings.filter((ring) => ring.t < RING_TIME);
   for (const puff of g.puffs) puff.t += dt;

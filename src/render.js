@@ -1,6 +1,6 @@
 // All drawing on the canvas: sprites for the characters, weapons and arena, shapes for the rest.
 
-import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, ARC_TIME, PUFF_TIME, RING_TIME, BELT, MELEE_FX } from './data.js';
+import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, ARC_TIME, PUFF_TIME, RING_TIME, WAVE_TIME, BELT, MELEE_FX } from './data.js';
 
 const INK = '#1b1d21';
 
@@ -64,6 +64,7 @@ const WEAPON_ART = {
   wrench: { grip: [0.34, 0.52] },
   extinguisher: { grip: [0.288, 0.5] },
   horseshoe: { grip: [0.238, 0.5] },
+  microwave: { grip: [0.278, 0.5] },
 };
 for (const [id, art] of Object.entries(WEAPON_ART)) art.img = loadImage(`assets/weapons/${id}.png`);
 
@@ -280,15 +281,16 @@ const ENEMY_ART = {
 };
 for (const [type, art] of Object.entries(ENEMY_ART)) art.img = loadImage(`assets/robots/${type}.png`);
 
-// A white silhouette of an image: the robot flashes with it when hit.
-function whiteCopy(img) {
+// A silhouette of an image filled with one colour: a robot flashes white when hit and glows
+// red as the microwave heats it.
+function tintCopy(img, col) {
   const cv = document.createElement('canvas');
   cv.width = img.naturalWidth;
   cv.height = img.naturalHeight;
   const x = cv.getContext('2d');
   x.drawImage(img, 0, 0);
   x.globalCompositeOperation = 'source-in';
-  x.fillStyle = '#fff';
+  x.fillStyle = col;
   x.fillRect(0, 0, cv.width, cv.height);
   return cv;
 }
@@ -315,6 +317,7 @@ function drawEnemy(c, e, g) {
     ox = Math.sin(t * 40) * 0.5;
     oy += Math.sin(t * 31) * 0.5;
   }
+  if (e.heat > 0.5) ox += Math.sin(t * 95) * 1.6 * (e.heat - 0.5); // about to pop: it trembles
 
   c.save();
   c.translate(e.x + ox, e.y + oy);
@@ -322,9 +325,15 @@ function drawEnemy(c, e, g) {
   c.imageSmoothingQuality = 'high';
   c.drawImage(art.img, -w / 2, -h / 2, w, h);
   if (e.flash > 0) {
-    art.white ||= whiteCopy(art.img);
+    art.white ||= tintCopy(art.img, '#fff');
     c.globalAlpha = 0.8;
     c.drawImage(art.white, -w / 2, -h / 2, w, h);
+    c.globalAlpha = 1;
+  }
+  if (e.heat > 0) {
+    art.hot ||= tintCopy(art.img, '#ff4a12');
+    c.globalAlpha = 0.65 * e.heat;
+    c.drawImage(art.hot, -w / 2, -h / 2, w, h);
     c.globalAlpha = 1;
   }
   if (e.slow > 0 && e.foam) {
@@ -471,7 +480,7 @@ function drawObstacle(c, o) {
   // a hit barrel flashes white; a lit one blinks until it goes off
   const lit = o.flash > 0 || (o.fuse >= 0 && Math.floor(o.fuse * 30) % 2 === 0);
   if (lit) {
-    art.white ||= whiteCopy(art.img);
+    art.white ||= tintCopy(art.img, '#fff');
     const w = (art.h * art.img.naturalWidth) / art.img.naturalHeight;
     c.globalAlpha = 0.8;
     c.drawImage(art.white, o.x - w / 2, base - art.h, w, art.h);
@@ -501,6 +510,24 @@ function drawSlash(c, sl) {
   c.arc(a.bx, a.by, sl.len * 1.02, from, to, sl.flip < 0);
   c.lineWidth = 2.5;
   c.strokeStyle = `rgba(255, 255, 255, ${0.9 * fade})`;
+  c.stroke();
+}
+
+// The microwave's beam: an arc that runs from the door to the end of the cone and fades, over a
+// faint warm wedge. A new one leaves with every tick, so the beam reads as a train of waves.
+function drawWave(c, wave) {
+  const k = wave.t / WAVE_TIME;
+  c.beginPath();
+  c.moveTo(wave.x, wave.y);
+  c.arc(wave.x, wave.y, wave.range, wave.ang - wave.half, wave.ang + wave.half);
+  c.closePath();
+  c.fillStyle = `rgba(255, 150, 40, ${0.07 * (1 - k)})`;
+  c.fill();
+  c.beginPath();
+  c.arc(wave.x, wave.y, 6 + (wave.range - 6) * k, wave.ang - wave.half, wave.ang + wave.half);
+  c.lineWidth = 3;
+  c.lineCap = 'round';
+  c.strokeStyle = `rgba(255, 190, 70, ${0.75 * (1 - k)})`;
   c.stroke();
 }
 
@@ -736,6 +763,7 @@ export function draw(c, g) {
   for (const sl of g.slashes) drawSlash(c, sl);
   for (const m of g.impacts) drawImpact(c, m);
   for (const b of g.blasts) drawBlast(c, b);
+  for (const wave of g.waves) drawWave(c, wave);
   for (const ring of g.rings) drawRing(c, ring);
   for (const puff of g.puffs) drawPuff(c, puff);
   for (const arc of g.arcs) drawArc(c, arc);
