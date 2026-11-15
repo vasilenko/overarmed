@@ -77,7 +77,10 @@ export const DROP_REST = 0.45;
 //           its way; then it flies back into the hand, pulled in with the acceleration `pull`,
 //           and hits them again. The hand is empty meanwhile, and cd only starts at the catch;
 //   spray — the fire extinguisher: a short cone of foam that opens `cone` radians to each side of
-//           the aim. Every robot in it is shoved away and slowed down for `slow` seconds.
+//           the aim. Every robot in it is shoved away and slowed down for `slow` seconds;
+//   pull  — the horseshoe magnet: it picks the robot in range with the most neighbours and yanks
+//           every robot within `field` pixels of it into one heap around it. Heavy robots move
+//           less. The whole heap is slowed down for `slow` seconds.
 export const WEAPONS = {
   revolver: {
     name: 'Revolver', kind: 'ranged', starter: true, cost: 22,
@@ -131,6 +134,12 @@ export const WEAPONS = {
     muzzle: [29, 0],
     blurb: 'Foam shoves robots back and slows them down. Barely scratches them.',
   },
+  horseshoe: {
+    name: 'Horseshoe Magnet', kind: 'ranged', cost: 24,
+    dmg: 2, cd: 1.6, range: 240, move: 'pull', field: 130, slow: 0.8,
+    muzzle: [30, 0],
+    blurb: 'Yanks robots into one tight heap. Sets them up for your other hands.',
+  },
 };
 
 // How many seconds a lightning arc from the jumper cables stays on screen.
@@ -140,6 +149,8 @@ export const ARC_TIME = 0.14;
 export const SLOW = 0.45;
 // How many seconds a puff of foam flies before it melts away.
 export const PUFF_TIME = 0.4;
+// How many seconds the rings of the magnet's field take to close in on the heap.
+export const RING_TIME = 0.3;
 
 // mass — how hard it is to push back. ai: chase goes for the player, shooter keeps its distance.
 // flies — the robot passes over obstacles instead of walking around them.

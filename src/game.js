@@ -3,11 +3,15 @@
 
 import {
   W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS, OBSTACLES, LAYOUT, BELT,
-  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, MELEE_FX, FLASH_TIME, BLAST_TIME, ARC_TIME, SLOW, PUFF_TIME, waveCfg,
+  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, MELEE_FX, FLASH_TIME, BLAST_TIME, ARC_TIME, SLOW, PUFF_TIME, RING_TIME, waveCfg,
 } from './data.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// A push on a robot dies down fast: this is the share of it left after one second. A robot pushed
+// at v pixels per second therefore travels v / PUSH_REACH pixels in total.
+const PUSH_FADE = 0.002;
+const PUSH_REACH = -Math.log(PUSH_FADE);
 const pickKey = (obj) => {
   const k = Object.keys(obj);
   return k[(Math.random() * k.length) | 0];
@@ -47,6 +51,7 @@ export function newGame(starter) {
     slashes: [], // sword trails
     arcs: [], // lightning from the jumper cables
     puffs: [], // foam from the fire extinguisher
+    rings: [], // the magnet's field closing in on a heap
     hitStop: 0, // seconds left of the freeze after a bat hit
     boss: null,
     shake: 0,
@@ -423,6 +428,7 @@ function stepArms(g, dt) {
       if (def.move === 'zap') zap(g, def, t, dmg, mx, my);
       else if (def.move === 'throw') hurl(g, a, def, dmg, range, mx, my);
       else if (def.move === 'spray') spray(g, a, def, dmg, range, mx, my);
+      else if (def.move === 'pull') pull(g, a, def, dmg, range);
       else shoot(g, a, def, dmg, range, mx, my);
     }
   }
@@ -592,6 +598,7 @@ function spray(g, a, def, dmg, range, x, y) {
   for (const e of inCone(g, x, y, a.aim, range, def.cone)) {
     hurtEnemy(g, e, dmg, a.aim, def.knock, true);
     e.slow = def.slow;
+    e.foam = true; // drawn caked with foam for as long as it is slowed
   }
   // the foam itself is only for show: puffs that fly out to the end of the cone and melt
   for (let i = 0; i < 5 && g.puffs.length < 160; i++) {
@@ -600,6 +607,34 @@ function spray(g, a, def, dmg, range, x, y) {
     g.puffs.push({ x, y, dx: Math.cos(ang) * reach, dy: Math.sin(ang) * reach, size: rand(3, 5), t: 0 });
   }
   g.sfx.push('hiss');
+}
+
+// The horseshoe magnet: the heap forms around the robot in range that has the most neighbours.
+// Every robot within the field is yanked toward it with just enough of a push to arrive next to
+// it; a heavy robot gets the same push and so travels less. The whole heap is slowed for a moment.
+function pull(g, a, def, dmg, range) {
+  let centre = null;
+  let most = 0;
+  for (const e of g.enemies) {
+    if (e.dead || Math.hypot(e.x - a.bx, e.y - a.by) - e.r >= range || hidden(g, a.bx, a.by, e.x, e.y)) continue;
+    const crowd = g.enemies.filter((o) => !o.dead && Math.hypot(o.x - e.x, o.y - e.y) < def.field).length;
+    if (crowd > most) {
+      most = crowd;
+      centre = e;
+    }
+  }
+  if (!centre) return;
+  a.aim = Math.atan2(centre.y - a.by, centre.x - a.bx);
+  for (const e of g.enemies) {
+    if (e.dead) continue;
+    const d = Math.hypot(e.x - centre.x, e.y - centre.y);
+    if (d >= def.field) continue;
+    const gap = Math.max(0, d - e.r - centre.r); // the centre itself and its close neighbours stay put
+    hurtEnemy(g, e, dmg, Math.atan2(centre.y - e.y, centre.x - e.x), gap * PUSH_REACH * 0.9);
+    e.slow = Math.max(e.slow || 0, def.slow);
+  }
+  g.rings.push({ x: centre.x, y: centre.y, r: def.field, t: 0 });
+  g.sfx.push('hum');
 }
 
 // The boomerang wrench leaves the hand. It is a shot that remembers its hand: `out` is how far
@@ -725,7 +760,7 @@ function dropAt(g, kind, val, x, y, spread) {
 function stepEnemies(g, dt) {
   g.enemies = g.enemies.filter((e) => !e.dead);
   const p = g.player;
-  const decay = Math.pow(0.002, dt);
+  const decay = Math.pow(PUSH_FADE, dt);
 
   for (const e of g.enemies) {
     const def = ENEMIES[e.type];
@@ -760,6 +795,7 @@ function stepEnemies(g, dt) {
     if (!def.flies) [vx, vy] = steerAround(g, e, vx, vy);
     const pace = e.slow > 0 && ai !== 'boss' ? SLOW : 1; // foam and magnets slow a robot down
     if (e.slow > 0) e.slow -= dt;
+    else e.foam = false;
     e.x += (vx * e.speed * pace + e.kx) * dt;
     e.y += (vy * e.speed * pace + e.ky) * dt;
     if (!def.flies) {
@@ -896,6 +932,7 @@ function spawnEnemy(g, type, x, y) {
     speed: d.speed * rand(0.9, 1.1),
     kx: 0, ky: 0, flash: 0,
     slow: 0, // seconds left of being slowed down
+    foam: false, // whether it was foam that slowed it
     cd: rand(1, 2.5),
     strafe: Math.random() < 0.5 ? -1 : 1,
     in: false, dead: false,
@@ -1042,6 +1079,8 @@ function stepFx(g, dt) {
   g.slashes = g.slashes.filter((sl) => sl.t < sl.dur + MELEE_FX.slashFade);
   for (const b of g.blasts) b.t += dt;
   g.blasts = g.blasts.filter((b) => b.t < BLAST_TIME);
+  for (const ring of g.rings) ring.t += dt;
+  g.rings = g.rings.filter((ring) => ring.t < RING_TIME);
   for (const puff of g.puffs) puff.t += dt;
   g.puffs = g.puffs.filter((puff) => puff.t < PUFF_TIME);
   for (const arc of g.arcs) arc.t += dt;

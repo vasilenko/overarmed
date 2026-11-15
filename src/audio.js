@@ -25,6 +25,7 @@ const SOUNDS = {
   zap: ['sawtooth', 1700, 240, 0.13, 0.05],
   catch: ['sine', 520, 780, 0.05, 0.05],
   hiss: ['sawtooth', 3200, 2400, 0.07, 0.012],
+  hum: ['sine', 90, 240, 0.28, 0.1],
 };
 
 export function play(name) {
