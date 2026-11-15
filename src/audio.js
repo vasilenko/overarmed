@@ -27,6 +27,9 @@ const SOUNDS = {
   hiss: ['sawtooth', 3200, 2400, 0.07, 0.012],
   buzz: ['square', 62, 66, 0.2, 0.018],
   pop: ['square', 420, 1500, 0.07, 0.08],
+  windup: ['sawtooth', 70, 280, 0.8, 0.09],
+  dash: ['sawtooth', 320, 60, 0.45, 0.12],
+  rage: ['square', 60, 240, 0.7, 0.12],
 };
 
 export function play(name) {

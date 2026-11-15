@@ -1,6 +1,6 @@
 // All drawing on the canvas: sprites for the characters, weapons and arena, shapes for the rest.
 
-import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, ARC_TIME, PUFF_TIME, WAVE_TIME, BELT, MELEE_FX } from './data.js';
+import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, BOSS, FLASH_TIME, BLAST_TIME, ARC_TIME, PUFF_TIME, WAVE_TIME, BELT, MELEE_FX } from './data.js';
 
 const INK = '#1b1d21';
 
@@ -317,6 +317,20 @@ function drawEnemy(c, e, g) {
     oy += Math.sin(t * 31) * 0.5;
   }
   if (e.heat > 0.5) ox += Math.sin(t * 95) * 1.6 * (e.heat - 0.5); // about to pop: it trembles
+  // the Director: he shakes while winding up a charge and sags, swaying, while dazed after it
+  if (e.act === 'windup') ox += Math.sin(t * 80) * 2.2;
+  if (e.act === 'rest') {
+    oy += 7;
+    rot = 0.1 + Math.sin(t * 3) * 0.1;
+  }
+  if (e.act === 'dash') {
+    // two fading copies trail behind him in the dash
+    for (const [back, alpha] of [[48, 0.14], [24, 0.28]]) {
+      c.globalAlpha = alpha;
+      c.drawImage(art.img, e.x - Math.cos(e.ang) * back - w / 2, e.y + oy - Math.sin(e.ang) * back - h / 2, w, h);
+    }
+    c.globalAlpha = 1;
+  }
 
   c.save();
   c.translate(e.x + ox, e.y + oy);
@@ -329,9 +343,12 @@ function drawEnemy(c, e, g) {
     c.drawImage(art.white, -w / 2, -h / 2, w, h);
     c.globalAlpha = 1;
   }
-  if (e.heat > 0) {
+  // red means hot: a robot in the microwave, the Director winding up a charge or simply enraged
+  const windup = e.act === 'windup' ? 0.6 * (1 - e.actT / BOSS.charge.windup) : 0;
+  const red = Math.max(0.65 * (e.heat || 0), windup, e.rage ? 0.16 : 0);
+  if (red > 0) {
     art.hot ||= tintCopy(art.img, '#ff4a12');
-    c.globalAlpha = 0.65 * e.heat;
+    c.globalAlpha = red;
     c.drawImage(art.hot, -w / 2, -h / 2, w, h);
     c.globalAlpha = 1;
   }
@@ -355,6 +372,34 @@ function drawEnemy(c, e, g) {
     c.fillStyle = '#ff6b6b';
     c.fillRect(e.x - 17, top + 1, 34 * Math.max(0, e.hp / e.maxHp), 3);
   }
+}
+
+// The lane the Director is about to charge down, painted on the floor: faint and blinking while
+// it still follows Buddy, solid once it is locked. Arrows run along it toward where he will go.
+function drawLane(c, e, t) {
+  const C = BOSS.charge;
+  // during the dash only the stretch still ahead of him is left
+  const len = C.speed * (e.act === 'dash' ? Math.max(0, e.actT) : C.time) + e.r;
+  const locked = e.act === 'dash' || e.actT <= C.lock;
+  c.save();
+  c.translate(e.x, e.y);
+  c.rotate(e.ang);
+  c.fillStyle = `rgba(255, 56, 56, ${locked ? 0.34 : 0.14 + 0.08 * Math.sin(t * 28)})`;
+  c.fillRect(0, -e.r, len, e.r * 2);
+  c.strokeStyle = `rgba(255, 120, 120, ${locked ? 0.9 : 0.5})`;
+  c.lineWidth = 2;
+  c.strokeRect(0, -e.r, len, e.r * 2);
+  c.lineWidth = 5;
+  c.lineJoin = 'round';
+  c.strokeStyle = `rgba(255, 220, 220, ${locked ? 0.55 : 0.3})`;
+  for (let x = e.r + ((t * 260) % 46); x < len - 16; x += 46) {
+    c.beginPath();
+    c.moveTo(x, -e.r * 0.5);
+    c.lineTo(x + 16, 0);
+    c.lineTo(x, e.r * 0.5);
+    c.stroke();
+  }
+  c.restore();
 }
 
 // A conveyor belt: the sprite assets/obstacles/belt.png, drawn from straight above and lying
@@ -703,7 +748,7 @@ function hud(c, g) {
     if (bk > 0) {
       c.beginPath();
       c.roundRect(W / 2 - 217, 55, 434 * bk, 12, 3);
-      c.fillStyle = '#ff9ec4';
+      c.fillStyle = g.boss.rage ? '#ff4f6d' : '#ff9ec4'; // the bar turns red when he is enraged
       c.fill();
     }
     c.font = 'bold 13px system-ui, sans-serif';
@@ -738,6 +783,7 @@ export function draw(c, g) {
   drawFenceBack(c);
   for (const b of g.belts) drawBelt(c, b, g.time);
   for (const d of g.drops) drawDrop(c, d, g.time);
+  for (const e of g.enemies) if (e.act === 'windup' || e.act === 'dash') drawLane(c, e, g.time);
   // Everything that stands on the floor shares one queue, sorted by where it touches the floor:
   // whoever is lower on the screen is closer to the viewer and is drawn on top.
   const queue = [{ y: g.player.y, draw: () => drawBuddy(c, g) }];

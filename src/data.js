@@ -161,7 +161,31 @@ export const ENEMIES = {
   drone: { name: 'Courier Drone', hp: 9, speed: 165, dmg: 6, r: 11, bolts: 1, mass: 0.7, ai: 'chase', flies: true },
   copier: { name: 'Copier', hp: 26, speed: 60, dmg: 8, r: 17, bolts: 2, mass: 1.3, ai: 'shooter' },
   forklift: { name: 'Forklift', hp: 90, speed: 48, dmg: 20, r: 24, bolts: 5, mass: 3.5, ai: 'chase' },
-  boss: { name: 'Director-3000', hp: 3500, speed: 70, dmg: 25, r: 44, bolts: 40, mass: 25, ai: 'boss', flies: true },
+  boss: { name: 'Director-3000', hp: 4500, speed: 70, dmg: 30, r: 44, bolts: 40, mass: 25, ai: 'boss', flies: true },
+};
+
+// The Director's fight. He drifts toward Buddy and, after every pause, makes the next move from
+// his list, always in the same order, so the fight can be learned. Below `rage` of his health he
+// is enraged: he flies faster, pauses less and works through a meaner list.
+//   pause — seconds between moves, and speed — how fast he drifts: [calm, enraged];
+//   ring  — `n` pink slips in all directions; enraged, a second ring follows `echo` seconds later,
+//           aimed between the slips of the first;
+//   fan   — `volleys` fans of `n` slips aimed at Buddy, `gap` seconds apart, `spread` radians wide;
+//   charge — he stops and shows the lane for `windup` seconds (it follows Buddy until `lock`
+//           seconds are left), dashes down it for `time` seconds, then hangs dazed for `rest`
+//           seconds; `crash` is the extra daze if he rams the fence. That is the time to hit him;
+//   summon — calls in `n` robots of the given type.
+// dmg everywhere is a share of his contact damage.
+export const BOSS = {
+  rage: 0.6,
+  pause: [1.6, 0.9],
+  speed: [1, 1.4],
+  moves: ['ring', 'fan', 'charge'],
+  rageMoves: ['ring', 'charge', 'fan', 'summon', 'charge'],
+  ring: { n: 16, speed: 200, dmg: 0.5, echo: 0.45 },
+  fan: { volleys: 3, gap: 0.3, n: 7, spread: 0.95, speed: 300, dmg: 0.5 },
+  charge: { windup: 0.8, lock: 0.22, speed: 720, time: 0.5, rest: 1, crash: 0.8, dmg: 1.4 },
+  summon: { n: 4, type: 'drone' },
 };
 
 // Obstacles on the factory floor. A new layout is rolled at the start of every shift.

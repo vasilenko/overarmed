@@ -2,7 +2,7 @@
 // The game does not play sounds itself, it pushes their names into g.sfx.
 
 import {
-  W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS, OBSTACLES, LAYOUT, BELT,
+  W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, BOSS, ITEMS, OBSTACLES, LAYOUT, BELT,
   PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, MELEE_FX, FLASH_TIME, BLAST_TIME, ARC_TIME, SLOW, PUFF_TIME, COOL, WAVE_TIME, waveCfg,
 } from './data.js';
 
@@ -798,14 +798,7 @@ function stepEnemies(g, dt) {
         foeShot(g, e, Math.atan2(dy, dx), 210);
       }
     } else if (ai === 'boss') {
-      e.cd -= dt;
-      if (e.cd <= 0) {
-        e.cd = e.hp < e.maxHp / 2 ? 2.2 : 3.2;
-        const n = 12;
-        const off = Math.random() * Math.PI;
-        for (let i = 0; i < n; i++) foeShot(g, e, off + (i / n) * Math.PI * 2, 190, 0.5);
-        g.sfx.push('ring');
-      }
+      [vx, vy] = stepBoss(g, e, dt, dx / d, dy / d);
     }
 
     // walking robots go around obstacles, flying ones pass over them
@@ -831,7 +824,7 @@ function stepEnemies(g, dt) {
       e.y = clamp(e.y, e.r, H - e.r);
     }
 
-    if (d < e.r + p.r - 3) hurtPlayer(g, e.dmg);
+    if (d < e.r + p.r - 3) hurtPlayer(g, e.act === 'dash' ? e.dmg * BOSS.charge.dmg : e.dmg);
   }
 
   // robots push each other apart so they do not clump into a single point
@@ -856,6 +849,110 @@ function stepEnemies(g, dt) {
       b.y += dy * push * (1 - ka);
     }
   }
+}
+
+// One frame of the Director. Returns where he flies, as a share of his own speed.
+function stepBoss(g, e, dt, tx, ty) {
+  const C = BOSS.charge;
+  const mood = e.rage ? 1 : 0;
+  if (!e.rage && e.hp < e.maxHp * BOSS.rage) {
+    e.rage = true;
+    e.cd = Math.min(e.cd, 0.5);
+    g.shake = Math.max(g.shake, 0.5);
+    floatText(g, e.x, e.y - e.r - 34, "YOU'RE FIRED!", '#ff9ec4');
+    g.sfx.push('rage');
+  }
+  const drift = BOSS.speed[mood];
+  e.actT -= dt;
+
+  if (e.act === 'windup') {
+    if (e.actT > C.lock) e.ang = Math.atan2(ty, tx); // the lane follows Buddy until it locks
+    if (e.actT <= 0) {
+      e.act = 'dash';
+      e.actT = C.time;
+      g.sfx.push('dash');
+    }
+    return [0, 0];
+  }
+  if (e.act === 'dash') {
+    const cos = Math.cos(e.ang);
+    const sin = Math.sin(e.ang);
+    // ramming the fence ends the dash early and dazes him for longer
+    const crash = (cos < 0 && e.x <= e.r + 2) || (cos > 0 && e.x >= W - e.r - 2) || (sin < 0 && e.y <= e.r + 2) || (sin > 0 && e.y >= H - e.r - 2);
+    if (crash) {
+      g.shake = Math.max(g.shake, 0.35);
+      g.sfx.push('blast');
+    }
+    if (crash || e.actT <= 0) {
+      e.act = 'rest';
+      e.actT = C.rest + (crash ? C.crash : 0);
+      return [0, 0];
+    }
+    return [(cos * C.speed) / e.speed, (sin * C.speed) / e.speed];
+  }
+  if (e.act === 'rest') {
+    if (e.actT <= 0) e.act = null;
+    return [0, 0];
+  }
+  if (e.act === 'fan') {
+    if (e.actT <= 0) {
+      const F = BOSS.fan;
+      const aim = Math.atan2(ty, tx);
+      for (let i = 0; i < F.n; i++) foeShot(g, e, aim + (i / (F.n - 1) - 0.5) * F.spread, F.speed, F.dmg);
+      g.sfx.push('ring');
+      e.actT = F.gap;
+      if (--e.left <= 0) e.act = null;
+    }
+    return [tx * drift * 0.4, ty * drift * 0.4]; // he slows down to take aim
+  }
+  if (e.act === 'echo') {
+    if (e.actT <= 0) {
+      bossRing(g, e, e.ang + Math.PI / BOSS.ring.n);
+      e.act = null;
+    }
+    return [tx * drift, ty * drift];
+  }
+
+  // no move in progress: fly at Buddy and count down to the next one
+  e.cd -= dt;
+  if (e.cd <= 0 && e.in) {
+    const moves = e.rage ? BOSS.rageMoves : BOSS.moves;
+    const move = moves[e.step++ % moves.length];
+    e.cd = BOSS.pause[mood];
+    if (move === 'ring') {
+      e.ang = Math.random() * Math.PI;
+      bossRing(g, e, e.ang);
+      if (e.rage) {
+        e.act = 'echo';
+        e.actT = BOSS.ring.echo;
+      }
+    } else if (move === 'fan') {
+      e.act = 'fan';
+      e.left = BOSS.fan.volleys;
+      e.actT = 0;
+    } else if (move === 'charge') {
+      e.act = 'windup';
+      e.actT = C.windup;
+      e.ang = Math.atan2(ty, tx);
+      g.sfx.push('windup');
+    } else if (move === 'summon') {
+      const S = BOSS.summon;
+      for (let i = 0; i < S.n && g.enemies.length < 140; i++) {
+        const ang = (i / S.n) * Math.PI * 2;
+        spawnEnemy(g, S.type, e.x + Math.cos(ang) * (e.r + 20), e.y + Math.sin(ang) * (e.r + 20));
+      }
+      burst(g, e.x, e.y, '#ff9ec4', 10);
+      g.sfx.push('wave');
+    }
+  }
+  return [tx * drift, ty * drift];
+}
+
+// A ring of pink slips in all directions, the first of them flying at the angle `off`.
+function bossRing(g, e, off) {
+  const R = BOSS.ring;
+  for (let i = 0; i < R.n; i++) foeShot(g, e, off + (i / R.n) * Math.PI * 2, R.speed, R.dmg);
+  g.sfx.push('ring');
 }
 
 function foeShot(g, e, ang, speed, dmgMul = 1) {
@@ -956,6 +1053,9 @@ function spawnEnemy(g, type, x, y) {
     strafe: Math.random() < 0.5 ? -1 : 1,
     in: false, dead: false,
     seed: Math.random() * 10,
+    // the Director only: the move in progress and its timer, the place in his list of moves,
+    // the direction of his charge, volleys left to fire, and whether he is enraged
+    act: null, actT: 0, step: 0, ang: 0, left: 0, rage: false,
   };
   e.maxHp = e.hp;
   g.enemies.push(e);
