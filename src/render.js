@@ -61,6 +61,7 @@ const WEAPON_ART = {
   shotgun: { grip: [0.245, 0.63] },
   chainsaw: { grip: [0.22, 0.637] },
   cables: { grip: [0.288, 0.5] },
+  wrench: { grip: [0.288, 0.5] },
 };
 for (const [id, art] of Object.entries(WEAPON_ART)) art.img = loadImage(`assets/weapons/${id}.png`);
 
@@ -183,11 +184,20 @@ const SHOT_ART = {
   revolver: { file: 'bullet', h: 7, grip: [0.8, 0.5] },
   rifle: { file: 'tracer', h: 3.6, grip: [0.96, 0.5] },
   shotgun: { file: 'pellet', h: 6, grip: [0.78, 0.5] },
+  wrench: { file: 'wrench', h: 14 }, // the thrown wrench, without the fist; it spins as it flies
   flash: { file: 'flash', h: 18, grip: [0.04, 0.5] },
 };
 for (const art of Object.values(SHOT_ART)) art.img = loadImage(`assets/shots/${art.file}.png`);
 
 function drawShot(c, s) {
+  if (s.arm) {
+    // a thrown weapon: a faint streak of where it has just been, then the spinning sprite
+    c.globalAlpha = 0.25;
+    drawArt(c, SHOT_ART[s.kind], s.x - Math.cos(s.ang) * 9, s.y - Math.sin(s.ang) * 9, 1, s.spin - 0.7);
+    c.globalAlpha = 1;
+    drawArt(c, SHOT_ART[s.kind], s.x, s.y, 1, s.spin);
+    return;
+  }
   // a warm glow around the bullet's head: without it a small projectile gets lost on the floor
   const glow = c.createRadialGradient(s.x, s.y, 0, s.x, s.y, 11);
   glow.addColorStop(0, 'rgba(255, 190, 70, 0.45)');
@@ -242,8 +252,8 @@ function drawBuddy(c, g) {
   for (const { a, rest } of hands) {
     const ang = a.id ? a.aim : rest;
     const flip = Math.cos(ang) < 0; // anything pointing left is flipped so it is not upside down
-    if (!a.id) {
-      drawItem(c, 'fist', a.x, a.y, 1, ang, flip);
+    if (!a.id || a.away) {
+      drawItem(c, 'fist', a.x, a.y, 1, ang, flip); // a hand whose weapon has been thrown is empty too
       continue;
     }
     c.save();

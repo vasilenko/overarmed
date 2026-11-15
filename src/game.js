@@ -27,6 +27,7 @@ export function newGame(starter) {
       id: null, lvl: 1, cd: 0, aim: s.ang, target: null,
       // an attack in progress: swing runs 0..1 over dur seconds, move is its kind, victim its target
       swing: -1, dur: 0, move: null, victim: null, dir: 0, flip: 1, hit: null,
+      away: false, // the weapon has been thrown and is not in the hand right now
       x: 0, y: 0, bx: 0, by: 0,
     })),
     items: {},
@@ -359,6 +360,7 @@ function stepArms(g, dt) {
     const slot = ARM_SLOTS[i];
     const def = WEAPONS[a.id];
     const melee = def.kind === 'melee';
+    if (a.away) continue; // an empty hand waits for its wrench to come back
     a.cd -= dt * s.rate;
 
     // an attack is in progress
@@ -418,6 +420,7 @@ function stepArms(g, dt) {
       const mx = a.bx + Math.cos(a.aim) * fwd - Math.sin(a.aim) * side;
       const my = a.by + Math.sin(a.aim) * fwd + Math.cos(a.aim) * side;
       if (def.move === 'zap') zap(g, def, t, dmg, mx, my);
+      else if (def.move === 'throw') hurl(g, a, def, dmg, range, mx, my);
       else shoot(g, a, def, dmg, range, mx, my);
     }
   }
@@ -568,8 +571,69 @@ function stepSmash(g, a, def, dmg) {
   g.sfx.push('smash');
 }
 
+// The boomerang wrench leaves the hand. It is a shot that remembers its hand: `out` is how far
+// it still has to fly before it turns back.
+function hurl(g, a, def, dmg, range, x, y) {
+  const reach = range + 30; // a little past the farthest target, so that it goes through it
+  a.away = true;
+  g.shots.push({
+    kind: a.id, arm: a, def, x, y,
+    ang: a.aim, speed: def.speed, brake: def.speed ** 2 / (2 * reach), // slows to a stop exactly at `reach`
+    back: false, spin: 0, r: 10, dmg, life: 1, hit: new Set(),
+  });
+  g.sfx.push('swing');
+}
+
+// One frame of the wrench's flight. On the way out it slows down and turns back when it stops,
+// hits cover or leaves the arena. On the way back it homes in on its hand, wherever Buddy has run
+// to, and flies over cover so that it always returns. Every robot is hit once each way.
+function stepWrench(g, s, dt) {
+  const a = s.arm;
+  s.spin += dt * 22;
+  if (s.back) {
+    s.speed = Math.min(s.def.speed * 1.3, s.speed + s.def.pull * dt);
+    const dx = a.bx - s.x;
+    const dy = a.by - s.y;
+    if (Math.hypot(dx, dy) <= s.speed * dt + 10) {
+      s.life = 0; // caught
+      a.away = false;
+      a.cd = s.def.cd;
+      g.sfx.push('catch');
+      return;
+    }
+    s.ang = Math.atan2(dy, dx);
+  } else {
+    s.speed -= s.brake * dt;
+  }
+  s.x += Math.cos(s.ang) * s.speed * dt;
+  s.y += Math.sin(s.ang) * s.speed * dt;
+  if (!s.back) {
+    const wall = g.obstacles.find((o) => !o.dead && (s.x - o.x) ** 2 + (s.y - o.y) ** 2 < o.r * o.r);
+    if (wall) {
+      burst(g, s.x, s.y, '#ffe7a3', 3);
+      hitObstacle(g, wall, s.dmg);
+    }
+    if (wall || s.speed <= 0 || s.x < 0 || s.x > W || s.y < 0 || s.y > H) {
+      s.back = true;
+      s.speed = 0;
+      s.hit.clear();
+    }
+  }
+  for (const e of g.enemies) {
+    if (e.dead || s.hit.has(e)) continue;
+    if ((e.x - s.x) ** 2 + (e.y - s.y) ** 2 < (e.r + s.r) ** 2) {
+      s.hit.add(e);
+      hurtEnemy(g, e, s.dmg, s.ang, s.def.knock);
+    }
+  }
+}
+
 function stepShots(g, dt) {
   for (const s of g.shots) {
+    if (s.arm) {
+      stepWrench(g, s, dt);
+      continue;
+    }
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     s.life -= dt;
@@ -831,6 +895,7 @@ function finishWave(g) {
   for (const a of g.arms) {
     a.swing = -1;
     a.target = null;
+    a.away = false; // a wrench still in flight is back in the hand for the break
   }
   g.player.moving = false;
   if (g.wave >= LAST_WAVE) {

@@ -72,7 +72,10 @@ export const DROP_REST = 0.45;
 // Ranged weapons fire bullets unless they have a move of their own:
 //   zap   — the jumper cables: no bullet, the charge hits the target at once and then jumps to the
 //           nearest robot within `jump` pixels, up to `chain` times; every jump keeps `falloff`
-//           of the damage.
+//           of the damage;
+//   throw — the boomerang wrench: it flies out past `range`, slowing down, and hits every robot on
+//           its way; then it flies back into the hand, pulled in with the acceleration `pull`,
+//           and hits them again. The hand is empty meanwhile, and cd only starts at the catch.
 export const WEAPONS = {
   revolver: {
     name: 'Revolver', kind: 'ranged', starter: true, cost: 22,
@@ -113,6 +116,12 @@ export const WEAPONS = {
     dmg: 9, cd: 0.9, range: 210, move: 'zap', chain: 4, jump: 110, falloff: 0.8, knock: 0,
     muzzle: [28, 0],
     blurb: 'Zaps a robot, and the charge jumps on to four more.',
+  },
+  wrench: {
+    name: 'Boomerang Wrench', kind: 'ranged', cost: 28,
+    dmg: 15, cd: 0.3, range: 260, move: 'throw', speed: 700, pull: 1800, knock: 110,
+    muzzle: [14, 0],
+    blurb: 'Flies out and comes back. Hits everything in its way, twice.',
   },
 };
 

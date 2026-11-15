@@ -38,7 +38,7 @@ function weaponFacts(id, lvl = 1) {
   return `<ul class="facts">
     <li>${w.kind === 'melee' ? 'Melee' : 'Ranged'}</li>
     <li>Damage ${dmg}${w.count > 1 ? ' × ' + w.count : ''}</li>
-    <li>${(1 / w.cd).toFixed(1)} attacks per second</li>
+    <li>${w.move === 'throw' ? 'Returns to the hand' : `${(1 / w.cd).toFixed(1)} attacks per second`}</li>
   </ul>`;
 }
 
