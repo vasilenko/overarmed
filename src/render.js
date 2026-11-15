@@ -62,7 +62,7 @@ const WEAPON_ART = {
   chainsaw: { grip: [0.22, 0.637] },
   cables: { grip: [0.343, 0.41] },
   wrench: { grip: [0.34, 0.52] },
-  extinguisher: { grip: [0.288, 0.5] },
+  extinguisher: { grip: [0.27, 0.525] },
   horseshoe: { grip: [0.416, 0.503] },
   microwave: { grip: [0.342, 0.515] },
 };

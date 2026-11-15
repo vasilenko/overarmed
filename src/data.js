@@ -135,7 +135,7 @@ export const WEAPONS = {
   extinguisher: {
     name: 'Fire Extinguisher', kind: 'ranged', cost: 24,
     dmg: 1, cd: 0.15, range: 140, move: 'spray', cone: 0.35, knock: 90, slow: 1.2,
-    muzzle: [29, 0],
+    muzzle: [39, -2],
     blurb: 'Foam shoves robots back and slows them down. Barely scratches them.',
   },
   horseshoe: {
