@@ -1,6 +1,6 @@
 // All drawing on the canvas: sprites for the characters, weapons and arena, shapes for the rest.
 
-import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, ARC_TIME, PUFF_TIME, RING_TIME, WAVE_TIME, BELT, MELEE_FX } from './data.js';
+import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, ARC_TIME, PUFF_TIME, WAVE_TIME, BELT, MELEE_FX } from './data.js';
 
 const INK = '#1b1d21';
 
@@ -63,7 +63,6 @@ const WEAPON_ART = {
   cables: { grip: [0.343, 0.41] },
   wrench: { grip: [0.34, 0.52] },
   extinguisher: { grip: [0.27, 0.525] },
-  horseshoe: { grip: [0.416, 0.503] },
   microwave: { grip: [0.342, 0.515] },
 };
 for (const [id, art] of Object.entries(WEAPON_ART)) art.img = loadImage(`assets/weapons/${id}.png`);
@@ -336,7 +335,7 @@ function drawEnemy(c, e, g) {
     c.drawImage(art.hot, -w / 2, -h / 2, w, h);
     c.globalAlpha = 1;
   }
-  if (e.slow > 0 && e.foam) {
+  if (e.slow > 0) {
     // a robot slowed by the extinguisher is caked with blobs of foam; they melt as the effect wears off
     c.fillStyle = `rgba(255, 255, 255, ${0.9 * Math.min(1, e.slow / 0.3)})`;
     for (let i = 0; i < 5; i++) {
@@ -529,19 +528,6 @@ function drawWave(c, wave) {
   c.lineCap = 'round';
   c.strokeStyle = `rgba(255, 190, 70, ${0.75 * (1 - k)})`;
   c.stroke();
-}
-
-// The magnet's field: two rings, red and blue like the poles, close in on the heap and fade.
-function drawRing(c, ring) {
-  const k = ring.t / RING_TIME;
-  c.lineWidth = 3;
-  for (const [lag, col] of [[0, '226, 60, 60'], [0.18, '80, 150, 255']]) {
-    const u = Math.max(0, k - lag) / (1 - lag);
-    c.beginPath();
-    c.arc(ring.x, ring.y, ring.r * (1 - 0.85 * (1 - (1 - u) ** 2)), 0, 7);
-    c.strokeStyle = `rgba(${col}, ${0.8 * Math.sin(Math.min(1, u * 1.1) * Math.PI)})`;
-    c.stroke();
-  }
 }
 
 // A puff of foam from the fire extinguisher: it shoots out fast, slows down, swells and melts.
@@ -764,7 +750,6 @@ export function draw(c, g) {
   for (const m of g.impacts) drawImpact(c, m);
   for (const b of g.blasts) drawBlast(c, b);
   for (const wave of g.waves) drawWave(c, wave);
-  for (const ring of g.rings) drawRing(c, ring);
   for (const puff of g.puffs) drawPuff(c, puff);
   for (const arc of g.arcs) drawArc(c, arc);
   for (const s of g.shots) drawShot(c, s);

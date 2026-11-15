@@ -78,9 +78,6 @@ export const DROP_REST = 0.45;
 //           and hits them again. The hand is empty meanwhile, and cd only starts at the catch;
 //   spray — the fire extinguisher: a short cone of foam that opens `cone` radians to each side of
 //           the aim. Every robot in it is shoved away and slowed down for `slow` seconds;
-//   pull  — the horseshoe magnet: it picks the robot in range with the most neighbours and yanks
-//           every robot within `field` pixels of it into one heap around it. Heavy robots move
-//           less. The whole heap is slowed down for `slow` seconds;
 //   cook  — the microwave: it heats every robot in a cone, `cone` radians to each side of the aim.
 //           A robot gains `heatUp` heat per tick, up to 1, and at full heat takes 1 + `ramp` times
 //           the damage; out of the beam it cools down again. A robot finished off by the heat pops:
@@ -138,12 +135,6 @@ export const WEAPONS = {
     muzzle: [39, -2],
     blurb: 'Foam shoves robots back and slows them down. Barely scratches them.',
   },
-  horseshoe: {
-    name: 'Horseshoe Magnet', kind: 'ranged', cost: 24,
-    dmg: 2, cd: 1.6, range: 240, move: 'pull', field: 130, slow: 0.8,
-    muzzle: [30, 0],
-    blurb: 'Yanks robots into one tight heap. Sets them up for your other hands.',
-  },
   microwave: {
     name: 'Microwave', kind: 'ranged', cost: 34,
     dmg: 2, cd: 0.2, range: 150, move: 'cook', cone: 0.4, heatUp: 0.15, ramp: 2, pop: 55, popDmg: 10, knock: 0,
@@ -162,8 +153,6 @@ export const PUFF_TIME = 0.4;
 // Heat a robot loses per second once the microwave is off it, and how long a wave of the beam lives.
 export const COOL = 0.5;
 export const WAVE_TIME = 0.4;
-// How many seconds the rings of the magnet's field take to close in on the heap.
-export const RING_TIME = 0.3;
 
 // mass — how hard it is to push back. ai: chase goes for the player, shooter keeps its distance.
 // flies — the robot passes over obstacles instead of walking around them.
