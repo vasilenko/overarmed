@@ -114,7 +114,7 @@ export const WEAPONS = {
   cables: {
     name: 'Jumper Cables', kind: 'ranged', cost: 30,
     dmg: 9, cd: 0.9, range: 210, move: 'zap', chain: 4, jump: 110, falloff: 0.8, knock: 0,
-    muzzle: [28, 0],
+    muzzle: [29, 0],
     blurb: 'Zaps a robot, and the charge jumps on to four more.',
   },
   wrench: {

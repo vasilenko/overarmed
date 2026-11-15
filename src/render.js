@@ -60,8 +60,8 @@ const WEAPON_ART = {
   rifle: { grip: [0.28, 0.585] },
   shotgun: { grip: [0.245, 0.63] },
   chainsaw: { grip: [0.22, 0.637] },
-  cables: { grip: [0.288, 0.5] },
-  wrench: { grip: [0.288, 0.5] },
+  cables: { grip: [0.343, 0.41] },
+  wrench: { grip: [0.34, 0.52] },
 };
 for (const [id, art] of Object.entries(WEAPON_ART)) art.img = loadImage(`assets/weapons/${id}.png`);
 
@@ -184,7 +184,7 @@ const SHOT_ART = {
   revolver: { file: 'bullet', h: 7, grip: [0.8, 0.5] },
   rifle: { file: 'tracer', h: 3.6, grip: [0.96, 0.5] },
   shotgun: { file: 'pellet', h: 6, grip: [0.78, 0.5] },
-  wrench: { file: 'wrench', h: 14 }, // the thrown wrench, without the fist; it spins as it flies
+  wrench: { file: 'wrench', h: 17 }, // the thrown wrench, without the fist; it spins as it flies
   flash: { file: 'flash', h: 18, grip: [0.04, 0.5] },
 };
 for (const art of Object.values(SHOT_ART)) art.img = loadImage(`assets/shots/${art.file}.png`);
