@@ -287,6 +287,7 @@ export function update(g, dt, input) {
 
   poseArms(g);
   stepArms(g, dt);
+  stepWaves(g);
   stepShots(g, dt);
   stepObstacles(g, dt);
   stepEnemies(g, dt);
@@ -418,11 +419,7 @@ function stepArms(g, dt) {
     } else {
       a.cd = def.cd;
       const dmg = weaponDmg(g, a);
-      // the bullet leaves from the muzzle; a weapon pointing left is flipped, so the offset changes sign
-      const [fwd, down] = def.muzzle;
-      const side = Math.cos(a.aim) < 0 ? -down : down;
-      const mx = a.bx + Math.cos(a.aim) * fwd - Math.sin(a.aim) * side;
-      const my = a.by + Math.sin(a.aim) * fwd + Math.cos(a.aim) * side;
+      const [mx, my] = muzzleOf(a, def);
       if (def.move === 'zap') zap(g, def, t, dmg, mx, my);
       else if (def.move === 'throw') hurl(g, a, def, dmg, range, mx, my);
       else if (def.move === 'spray') spray(g, a, def, dmg, range, mx, my);
@@ -430,6 +427,14 @@ function stepArms(g, dt) {
       else shoot(g, a, def, dmg, range, mx, my);
     }
   }
+}
+
+// Where the muzzle of a hand's weapon is while the weapon points at `ang`. A weapon pointing
+// left is drawn flipped, so the offset across the barrel changes sign.
+function muzzleOf(a, def, ang = a.aim) {
+  const [fwd, down] = def.muzzle;
+  const side = Math.cos(ang) < 0 ? -down : down;
+  return [a.bx + Math.cos(ang) * fwd - Math.sin(ang) * side, a.by + Math.sin(ang) * fwd + Math.cos(ang) * side];
 }
 
 // An ordinary shot: one bullet, or a fan of them, leaves the muzzle.
@@ -603,8 +608,18 @@ function cook(g, a, def, dmg, range, x, y) {
   for (const o of g.obstacles) {
     if (o.hp !== Infinity && !o.dead && coneHas(g, x, y, a.aim, range, def.cone, o)) hitObstacle(g, o, dmg);
   }
-  g.waves.push({ x, y, ang: a.aim, range, half: def.cone, t: 0 });
+  g.waves.push({ arm: a, def, x, y, ang: a.aim, range, half: def.cone, t: 0 });
   g.sfx.push('buzz');
+}
+
+// The microwave's beam is attached to the oven: its waves move with the hand as Buddy runs, and
+// turn with it for as long as the hand has a target. A hand without one swings back to rest, and
+// the last waves should not swing with it.
+function stepWaves(g) {
+  for (const wave of g.waves) {
+    if (wave.arm.target) wave.ang = wave.arm.aim;
+    [wave.x, wave.y] = muzzleOf(wave.arm, wave.def, wave.ang);
+  }
 }
 
 // A robot cooked to the end pops like popcorn and hurts the robots around it; those that die of
