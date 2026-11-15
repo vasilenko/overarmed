@@ -240,16 +240,16 @@ export const ITEMS = {
 export function waveCfg(n) {
   const boss = n === LAST_WAVE;
   const pool = [['intern', 10]];
-  if (n >= 2) pool.push(['drone', 3 + n * 0.4]);
-  if (n >= 3) pool.push(['copier', 2 + n * 0.2]);
-  if (n >= 5) pool.push(['forklift', 1 + (n - 5) * 0.5]);
+  if (n >= 2) pool.push(['drone', 3 + n * 0.5]);
+  if (n >= 3) pool.push(['copier', 2 + n * 0.3]);
+  if (n >= 4) pool.push(['forklift', 1 + (n - 4) * 0.5]);
   return {
     boss,
     pool,
     dur: boss ? 0 : 18 + n * 2.5, // the boss shift lasts as long as the boss is alive
-    interval: boss ? 1.6 : Math.max(0.85, 1.8 - n * 0.1), // pause between groups
-    group: boss ? 3 : 2 + Math.floor(n / 3), // robots per group
-    hpMul: 1 + 0.16 * (n - 1),
-    dmgMul: 1 + 0.06 * (n - 1),
+    interval: boss ? 1.6 : Math.max(0.7, 1.7 - n * 0.11), // pause between groups
+    group: boss ? 3 : 2 + Math.floor(n / 2.5), // robots per group
+    hpMul: 1 + 0.2 * (n - 1),
+    dmgMul: 1 + 0.08 * (n - 1),
   };
 }
