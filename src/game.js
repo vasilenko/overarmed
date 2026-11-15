@@ -3,7 +3,7 @@
 
 import {
   W, H, LAST_WAVE, ARM_SLOTS, BASE_STATS, WEAPONS, ENEMIES, ITEMS, OBSTACLES, LAYOUT, BELT,
-  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, MELEE_FX, FLASH_TIME, BLAST_TIME, waveCfg,
+  PLAYER_SPEED, PICKUP_RADIUS, DROP_REST, LUNGE, MELEE_FX, FLASH_TIME, BLAST_TIME, ARC_TIME, waveCfg,
 } from './data.js';
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -44,6 +44,7 @@ export function newGame(starter) {
     blasts: [], // barrel explosions still on screen
     impacts: [], // bursts where a heavy blow landed
     slashes: [], // sword trails
+    arcs: [], // lightning from the jumper cables
     hitStop: 0, // seconds left of the freeze after a bat hit
     boss: null,
     shake: 0,
@@ -416,29 +417,64 @@ function stepArms(g, dt) {
       const side = Math.cos(a.aim) < 0 ? -down : down;
       const mx = a.bx + Math.cos(a.aim) * fwd - Math.sin(a.aim) * side;
       const my = a.by + Math.sin(a.aim) * fwd + Math.cos(a.aim) * side;
-      for (let k = 0; k < def.count; k++) {
-        const off = def.count > 1
-          ? (k / (def.count - 1) - 0.5) * def.spread
-          : rand(-def.spread, def.spread) / 2;
-        const ang = a.aim + off;
-        g.shots.push({
-          kind: a.id,
-          x: mx,
-          y: my,
-          vx: Math.cos(ang) * def.speed,
-          vy: Math.sin(ang) * def.speed,
-          r: 5,
-          dmg,
-          pierce: def.pierce,
-          knock: def.knock,
-          life: (range + 40) / def.speed,
-          hit: new Set(),
-        });
-      }
-      g.flashes.push({ x: mx, y: my, ang: a.aim, t: 0 });
-      g.sfx.push('shoot');
+      if (def.move === 'zap') zap(g, def, t, dmg, mx, my);
+      else shoot(g, a, def, dmg, range, mx, my);
     }
   }
+}
+
+// An ordinary shot: one bullet, or a fan of them, leaves the muzzle.
+function shoot(g, a, def, dmg, range, mx, my) {
+  for (let k = 0; k < def.count; k++) {
+    const off = def.count > 1
+      ? (k / (def.count - 1) - 0.5) * def.spread
+      : rand(-def.spread, def.spread) / 2;
+    const ang = a.aim + off;
+    g.shots.push({
+      kind: a.id,
+      x: mx,
+      y: my,
+      vx: Math.cos(ang) * def.speed,
+      vy: Math.sin(ang) * def.speed,
+      r: 5,
+      dmg,
+      pierce: def.pierce,
+      knock: def.knock,
+      life: (range + 40) / def.speed,
+      hit: new Set(),
+    });
+  }
+  g.flashes.push({ x: mx, y: my, ang: a.aim, t: 0 });
+  g.sfx.push('shoot');
+}
+
+// The jumper cables: the charge hits the target at once, then keeps jumping to the nearest robot
+// that has not been hit yet, losing some of its damage on every jump. Cover does not stop a jump.
+function zap(g, def, first, dmg, x, y) {
+  const pts = [[x, y]]; // the path of the charge, kept for drawing the lightning
+  const hit = new Set();
+  let e = first;
+  for (let i = 0; e && i <= def.chain; i++) {
+    const [fx, fy] = pts[pts.length - 1];
+    hit.add(e);
+    pts.push([e.x, e.y]);
+    hurtEnemy(g, e, dmg, Math.atan2(e.y - fy, e.x - fx), def.knock);
+    burst(g, e.x, e.y, '#9fe8ff', 2);
+    dmg *= def.falloff;
+    let next = null;
+    let best = def.jump;
+    for (const o of g.enemies) {
+      if (o.dead || hit.has(o)) continue;
+      const d = Math.hypot(o.x - e.x, o.y - e.y) - o.r;
+      if (d < best) {
+        best = d;
+        next = o;
+      }
+    }
+    e = next;
+  }
+  g.arcs.push({ pts, t: 0 });
+  g.sfx.push('zap');
 }
 
 // Moves the fist `lunge` pixels along the attack direction and points the weapon at `aim`.
@@ -904,6 +940,8 @@ function stepFx(g, dt) {
   g.slashes = g.slashes.filter((sl) => sl.t < sl.dur + MELEE_FX.slashFade);
   for (const b of g.blasts) b.t += dt;
   g.blasts = g.blasts.filter((b) => b.t < BLAST_TIME);
+  for (const arc of g.arcs) arc.t += dt;
+  g.arcs = g.arcs.filter((arc) => arc.t < ARC_TIME);
   for (const f of g.flashes) f.t += dt;
   g.flashes = g.flashes.filter((f) => f.t < FLASH_TIME);
 }

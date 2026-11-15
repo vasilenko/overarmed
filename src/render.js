@@ -1,6 +1,6 @@
 // All drawing on the canvas: sprites for the characters, weapons and arena, shapes for the rest.
 
-import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, BELT, MELEE_FX } from './data.js';
+import { W, H, LAST_WAVE, ARM_SLOTS, ENEMIES, FLASH_TIME, BLAST_TIME, ARC_TIME, BELT, MELEE_FX } from './data.js';
 
 const INK = '#1b1d21';
 
@@ -60,6 +60,7 @@ const WEAPON_ART = {
   rifle: { grip: [0.28, 0.585] },
   shotgun: { grip: [0.245, 0.63] },
   chainsaw: { grip: [0.22, 0.637] },
+  cables: { grip: [0.288, 0.5] },
 };
 for (const [id, art] of Object.entries(WEAPON_ART)) art.img = loadImage(`assets/weapons/${id}.png`);
 
@@ -481,6 +482,40 @@ function drawSlash(c, sl) {
   c.stroke();
 }
 
+// Lightning from the jumper cables: a jagged line through every robot the charge jumped to.
+// The kinks are rolled anew on every frame, so the arc flickers while it fades.
+function drawArc(c, arc) {
+  const fade = 1 - arc.t / ARC_TIME;
+  c.beginPath();
+  c.moveTo(arc.pts[0][0], arc.pts[0][1]);
+  for (let i = 1; i < arc.pts.length; i++) {
+    const [ax, ay] = arc.pts[i - 1];
+    const [bx, by] = arc.pts[i];
+    const d = Math.hypot(bx - ax, by - ay) || 1;
+    const kinks = Math.max(1, Math.round(d / 16));
+    for (let k = 1; k < kinks; k++) {
+      const off = (Math.random() - 0.5) * 16;
+      c.lineTo(ax + ((bx - ax) * k) / kinks - ((by - ay) / d) * off, ay + ((by - ay) * k) / kinks + ((bx - ax) / d) * off);
+    }
+    c.lineTo(bx, by);
+  }
+  c.lineJoin = 'round';
+  c.lineCap = 'round';
+  c.lineWidth = 7;
+  c.strokeStyle = `rgba(90, 200, 255, ${0.45 * fade})`;
+  c.stroke();
+  c.lineWidth = 2.2;
+  c.strokeStyle = `rgba(240, 252, 255, ${fade})`;
+  c.stroke();
+  // a spark on every robot the charge went through
+  c.fillStyle = `rgba(200, 244, 255, ${0.8 * fade})`;
+  for (const [x, y] of arc.pts.slice(1)) {
+    c.beginPath();
+    c.arc(x, y, 5 + 3 * fade, 0, 7);
+    c.fill();
+  }
+}
+
 // The burst where a blow landed: a spiky star that pops and fades. The bat's is big, the stab's small.
 function drawImpact(c, m) {
   const k = m.t / MELEE_FX.impact;
@@ -654,6 +689,7 @@ export function draw(c, g) {
   for (const sl of g.slashes) drawSlash(c, sl);
   for (const m of g.impacts) drawImpact(c, m);
   for (const b of g.blasts) drawBlast(c, b);
+  for (const arc of g.arcs) drawArc(c, arc);
   for (const s of g.shots) drawShot(c, s);
   for (const f of g.flashes) drawFlash(c, f);
   for (const s of g.foeShots) drawFoeShot(c, s, g.time);

@@ -69,6 +69,10 @@ export const DROP_REST = 0.45;
 //   blade — the sword: it stabs a lone robot, but when `crowd` or more robots are within reach it
 //           slashes all of them in a wide arc instead; slashDmg, slashTime and arc describe the slash;
 //   saw   — the chainsaw: holds the bar on the target and grinds whatever touches it; arc is its wobble.
+// Ranged weapons fire bullets unless they have a move of their own:
+//   zap   — the jumper cables: no bullet, the charge hits the target at once and then jumps to the
+//           nearest robot within `jump` pixels, up to `chain` times; every jump keeps `falloff`
+//           of the damage.
 export const WEAPONS = {
   revolver: {
     name: 'Revolver', kind: 'ranged', starter: true, cost: 22,
@@ -104,7 +108,16 @@ export const WEAPONS = {
     dmg: 6, cd: 0.24, range: 48, len: 38, move: 'saw', arc: 0.3, time: 0.2, knock: 30,
     blurb: 'Saws through anything that gets close.',
   },
+  cables: {
+    name: 'Jumper Cables', kind: 'ranged', cost: 30,
+    dmg: 9, cd: 0.9, range: 210, move: 'zap', chain: 4, jump: 110, falloff: 0.8, knock: 0,
+    muzzle: [28, 0],
+    blurb: 'Zaps a robot, and the charge jumps on to four more.',
+  },
 };
+
+// How many seconds a lightning arc from the jumper cables stays on screen.
+export const ARC_TIME = 0.14;
 
 // mass — how hard it is to push back. ai: chase goes for the player, shooter keeps its distance.
 // flies — the robot passes over obstacles instead of walking around them.

@@ -22,6 +22,7 @@ const SOUNDS = {
   blast: ['sawtooth', 95, 28, 0.45, 0.16],
   smash: ['square', 150, 45, 0.18, 0.13],
   slash: ['triangle', 1000, 320, 0.11, 0.06],
+  zap: ['sawtooth', 1700, 240, 0.13, 0.05],
 };
 
 export function play(name) {
